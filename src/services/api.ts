@@ -10,7 +10,8 @@ import {
   orderBy, 
   limit,
   where,
-  setDoc
+  setDoc,
+  getDocFromServer
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
@@ -343,27 +344,30 @@ export const getInvites = async () => {
 
 export const addInvite = async (invite: { email: string; role: string }) => {
   const path = 'invites';
+  const normalizedEmail = invite.email.toLowerCase().trim();
   try {
     const newInvite = { 
       ...invite, 
+      email: normalizedEmail, // Save normalized email
       createdAt: new Date().toISOString(),
       invitedBy: auth.currentUser?.email 
     };
     // Use email as ID to prevent duplicates if someone is double-invited
-    const inviteRef = doc(db, 'invites', invite.email.toLowerCase());
+    const inviteRef = doc(db, 'invites', normalizedEmail);
     await setDoc(inviteRef, newInvite);
-    await logActivity('user', 'Invited User', `Email: ${invite.email}, Role: ${invite.role}`);
-    return { id: invite.email.toLowerCase(), ...newInvite };
+    await logActivity('user', 'Invited User', `Email: ${normalizedEmail}, Role: ${invite.role}`);
+    return { id: normalizedEmail, ...newInvite };
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
   }
 };
 
 export const deleteInvite = async (email: string) => {
-  const path = `invites/${email}`;
+  const normalizedEmail = email.toLowerCase().trim();
+  const path = `invites/${normalizedEmail}`;
   try {
-    await deleteDoc(doc(db, 'invites', email.toLowerCase()));
-    await logActivity('user', 'Removed Invite', `Email: ${email}`);
+    await deleteDoc(doc(db, 'invites', normalizedEmail));
+    await logActivity('user', 'Removed Invite', `Email: ${normalizedEmail}`);
     return { success: true };
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
@@ -418,9 +422,13 @@ export const updateUserProfile = async (userId: string, data: { displayName?: st
 export const syncUser = async (user: any) => {
   if (!user) return null;
   const path = `users/${user.uid}`;
+  const normalizedEmail = user.email ? user.email.toLowerCase().trim() : '';
+  
+  console.log('[Auth] Syncing user:', normalizedEmail);
+
   try {
     const userRef = doc(db, 'users', user.uid);
-    const userSnap = await getDoc(userRef);
+    const userSnap = await getDocFromServer(userRef);
     
     const userData = {
       email: user.email,
@@ -429,36 +437,68 @@ export const syncUser = async (user: any) => {
       lastLogin: new Date().toISOString()
     };
 
+    let role = 'viewer';
+    let needsUpdate = false;
+
     if (!userSnap.exists()) {
-      // Check for an invite
-      const inviteRef = doc(db, 'invites', user.email.toLowerCase());
-      const inviteSnap = await getDoc(inviteRef);
-      
-      let role = 'viewer';
+      console.log('[Auth] New user detected');
+      // NEW USER flow
       if (user.email === 'benjamintetteh@gmail.com') {
         role = 'admin';
-      } else if (inviteSnap.exists()) {
-        role = inviteSnap.data().role;
-        // Delete invite non-blocking, ignoring errors (profile is created now)
-        deleteDoc(inviteRef).catch(e => console.error('Failed to delete used invite:', e));
+        console.log('[Auth] Assigning bootstrap admin role');
+      } else {
+        // Check for an invite
+        console.log('[Auth] Checking for invite:', normalizedEmail);
+        const inviteRef = doc(db, 'invites', normalizedEmail);
+        const inviteSnap = await getDocFromServer(inviteRef);
+        
+        if (inviteSnap.exists()) {
+          role = inviteSnap.data().role;
+          console.log('[Auth] Invite found! Assigned role:', role);
+          deleteDoc(inviteRef).catch(e => console.error('Failed to delete used invite:', e));
+        } else {
+          console.log('[Auth] No invite found for email');
+        }
       }
 
       const newUser = { ...userData, role, createdAt: new Date().toISOString() };
       await setDoc(userRef, newUser);
-      
-      // Non-blocking log
-      logActivity('user', 'New User Registered', `Email: ${user.email} as ${role}`)
-        .catch(e => console.error('Log activity error:', e));
-        
+      logActivity('user', 'New User Registered', `Email: ${user.email} as ${role}`).catch(() => {});
       return newUser;
     } else {
-      // Non-blocking update
-      updateDoc(userRef, userData).catch(e => console.error('Update profile error:', e));
-      return { ...userSnap.data(), ...userData };
+      console.log('[Auth] Existing user detected');
+      // EXISTING USER flow
+      const currentData = userSnap.data();
+      role = currentData.role || 'viewer';
+      console.log('[Auth] Current role:', role);
+
+      // UPGRADE viewer if they have a pending invite
+      if (role === 'viewer' && user.email !== 'benjamintetteh@gmail.com') {
+        console.log('[Auth] Checking for upgrade invite:', normalizedEmail);
+        const inviteRef = doc(db, 'invites', normalizedEmail);
+        const inviteSnap = await getDocFromServer(inviteRef);
+
+        if (inviteSnap.exists()) {
+          role = inviteSnap.data().role;
+          needsUpdate = true;
+          console.log('[Auth] Upgrade invite found! New role:', role);
+          deleteDoc(inviteRef).catch(e => console.error('Failed to delete used invite:', e));
+        } else {
+          console.log('[Auth] No upgrade invite found');
+        }
+      }
+
+      if (needsUpdate || currentData.lastLogin !== userData.lastLogin) {
+        console.log('[Auth] Updating profile data');
+        updateDoc(userRef, { ...userData, role }).catch(e => console.error('Update profile error:', e));
+      }
+      
+      const combined = { ...currentData, ...userData, role };
+      console.log('[Auth] Final user state:', combined);
+      return combined;
     }
   } catch (error) {
-    console.error('syncUser error:', error);
-    // Don't use handleFirestoreError here to avoid blocking app load if sync fails
+    console.error('[Auth] syncUser critical error:', error);
     return { email: user.email, role: 'viewer' };
   }
 };

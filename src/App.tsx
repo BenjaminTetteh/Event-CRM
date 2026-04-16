@@ -66,15 +66,28 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (role === 'viewer' && user.email !== 'benjamintetteh@gmail.com') {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center p-6 text-center">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-10 border border-stone-100">
+        <div className="max-w-md w-full bg-white rounded-4xl shadow-2xl p-12 border border-stone-100">
+          <div className="w-16 h-16 bg-stone-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <Loader2 className="w-8 h-8 text-stone-300 animate-spin" />
+          </div>
           <h2 className="text-2xl font-serif font-bold text-stone-900 mb-4">Access Pending</h2>
-          <p className="text-stone-500 mb-8">Your account has been registered. Please wait for an administrator to approve your access.</p>
-          <button 
-            onClick={() => auth.signOut()}
-            className="w-full py-4 bg-stone-900 text-white rounded-xl font-bold hover:bg-stone-800 transition-all"
-          >
-            Sign Out
-          </button>
+          <p className="text-stone-500 mb-8 leading-relaxed">
+            Your account ({user.email}) has been registered. Please wait for an administrator to approve your access or check the link sent to you.
+          </p>
+          <div className="space-y-4">
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-4 bg-stone-900 text-white rounded-2xl font-bold hover:bg-stone-800 transition-all shadow-xl shadow-stone-900/10 active:scale-95"
+            >
+              Refresh Status
+            </button>
+            <button 
+              onClick={() => auth.signOut()}
+              className="w-full py-4 text-stone-400 font-bold hover:text-stone-600 transition-all"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     );

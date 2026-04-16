@@ -111,8 +111,8 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && (
         request.resource.data.role == 'viewer' || 
         request.auth.token.email == "benjamintetteh@gmail.com" ||
-        (exists(/databases/$(database)/documents/invites/$(request.auth.token.email.toLowerCase())) && 
-         request.resource.data.role == get(/databases/$(database)/documents/invites/$(request.auth.token.email.toLowerCase())).data.role)
+        (exists(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())) && 
+         request.resource.data.role == get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.role)
       );
       allow update: if isAdmin() || (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role);
       allow delete: if isAdmin();
@@ -121,7 +121,7 @@ service cloud.firestore {
     match /invites/{email} {
       allow read: if isAuthenticated(); // So syncUser (which runs as the logging-in user) can check for their own invite
       allow write: if isAdmin();
-      allow delete: if isAuthenticated() && request.auth.token.email.toLowerCase() == email.toLowerCase();
+      allow delete: if isAuthenticated() && request.auth.token.email.lower() == email.lower();
     }
 
     match /activity_logs/{logId} {
