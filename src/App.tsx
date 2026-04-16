@@ -32,15 +32,25 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const syncedUser = await api.syncUser(user) as any;
-        setUser(user);
-        setRole(syncedUser?.role || 'viewer');
-      } else {
-        setUser(null);
-        setRole(null);
+      try {
+        if (user) {
+          const syncedUser = await api.syncUser(user) as any;
+          setUser(user);
+          setRole(syncedUser?.role || 'viewer');
+        } else {
+          setUser(null);
+          setRole(null);
+        }
+      } catch (error) {
+        console.error('Error in auth state change:', error);
+        // Fallback to minimal user state so app can at least render the error or limited view
+        if (user) {
+          setUser(user);
+          setRole('viewer');
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);

@@ -439,20 +439,27 @@ export const syncUser = async (user: any) => {
         role = 'admin';
       } else if (inviteSnap.exists()) {
         role = inviteSnap.data().role;
-        // Optionally delete the invite after consumption
-        await deleteDoc(inviteRef);
+        // Delete invite non-blocking, ignoring errors (profile is created now)
+        deleteDoc(inviteRef).catch(e => console.error('Failed to delete used invite:', e));
       }
 
       const newUser = { ...userData, role, createdAt: new Date().toISOString() };
       await setDoc(userRef, newUser);
-      await logActivity('user', 'New User Registered', `Email: ${user.email} as ${role}`);
+      
+      // Non-blocking log
+      logActivity('user', 'New User Registered', `Email: ${user.email} as ${role}`)
+        .catch(e => console.error('Log activity error:', e));
+        
       return newUser;
     } else {
-      await updateDoc(userRef, userData);
+      // Non-blocking update
+      updateDoc(userRef, userData).catch(e => console.error('Update profile error:', e));
       return { ...userSnap.data(), ...userData };
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    console.error('syncUser error:', error);
+    // Don't use handleFirestoreError here to avoid blocking app load if sync fails
+    return { email: user.email, role: 'viewer' };
   }
 };
 
