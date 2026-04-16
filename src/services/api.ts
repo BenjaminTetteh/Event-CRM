@@ -12,8 +12,7 @@ import {
   where,
   setDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage } from '../firebase';
+import { db, auth } from '../firebase';
 
 enum OperationType {
   CREATE = 'create',
@@ -78,14 +77,11 @@ export const getLeads = async () => {
   }
 };
 
-/**
- * Saves the Public Intake Form data into a leads collection.
- */
-export const addLead = async (data: any) => {
+export const createLead = async (lead: any) => {
   const path = 'leads';
   try {
     const newLead = { 
-      ...data, 
+      ...lead, 
       status: 'new',
       createdAt: new Date().toISOString() 
     };
@@ -95,17 +91,6 @@ export const addLead = async (data: any) => {
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
   }
-};
-
-/**
- * Legacy alias for addLead
- */
-export const createLead = async (lead: any, inspirationFile?: File) => {
-  let inspirationLink = lead.inspirationLink || '';
-  if (inspirationFile) {
-    inspirationLink = await uploadInspiration(inspirationFile);
-  }
-  return addLead({ ...lead, inspirationLink });
 };
 
 export const updateLead = async (id: string, lead: any) => {
@@ -279,13 +264,6 @@ export const deleteQuote = async (id: string) => {
   }
 };
 
-/**
- * Updates a Quote status (e.g., from 'draft' to 'quote' to 'invoice' to 'paid').
- */
-export const updateQuoteStatus = async (id: string, status: string) => {
-  return updateQuote(id, { status });
-};
-
 // Dashboard Stats
 export const getDashboardStats = async () => {
   try {
@@ -353,6 +331,45 @@ export const getUsers = async () => {
   }
 };
 
+export const getInvites = async () => {
+  const path = 'invites';
+  try {
+    const snapshot = await getDocs(collection(db, path));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+};
+
+export const addInvite = async (invite: { email: string; role: string }) => {
+  const path = 'invites';
+  try {
+    const newInvite = { 
+      ...invite, 
+      createdAt: new Date().toISOString(),
+      invitedBy: auth.currentUser?.email 
+    };
+    // Use email as ID to prevent duplicates if someone is double-invited
+    const inviteRef = doc(db, 'invites', invite.email.toLowerCase());
+    await setDoc(inviteRef, newInvite);
+    await logActivity('user', 'Invited User', `Email: ${invite.email}, Role: ${invite.role}`);
+    return { id: invite.email.toLowerCase(), ...newInvite };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+};
+
+export const deleteInvite = async (email: string) => {
+  const path = `invites/${email}`;
+  try {
+    await deleteDoc(doc(db, 'invites', email.toLowerCase()));
+    await logActivity('user', 'Removed Invite', `Email: ${email}`);
+    return { success: true };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+};
+
 export const getUserProfile = async (userId: string) => {
   const path = `users/${userId}`;
   try {
@@ -413,11 +430,22 @@ export const syncUser = async (user: any) => {
     };
 
     if (!userSnap.exists()) {
-      // Check if this is the bootstrap admin
-      const role = user.email === 'benjamintetteh@gmail.com' ? 'admin' : 'viewer';
+      // Check for an invite
+      const inviteRef = doc(db, 'invites', user.email.toLowerCase());
+      const inviteSnap = await getDoc(inviteRef);
+      
+      let role = 'viewer';
+      if (user.email === 'benjamintetteh@gmail.com') {
+        role = 'admin';
+      } else if (inviteSnap.exists()) {
+        role = inviteSnap.data().role;
+        // Optionally delete the invite after consumption
+        await deleteDoc(inviteRef);
+      }
+
       const newUser = { ...userData, role, createdAt: new Date().toISOString() };
       await setDoc(userRef, newUser);
-      await logActivity('user', 'New User Registered', `Email: ${user.email}`);
+      await logActivity('user', 'New User Registered', `Email: ${user.email} as ${role}`);
       return newUser;
     } else {
       await updateDoc(userRef, userData);
@@ -429,21 +457,6 @@ export const syncUser = async (user: any) => {
 };
 
 // Activity Logs
-/**
- * Uploads a file to a folder named client-briefs/ and returns a download URL.
- */
-export const uploadInspiration = async (file: File) => {
-  const path = `client-briefs/${Date.now()}_${file.name}`;
-  try {
-    const storageRef = ref(storage, path);
-    const uploadResult = await uploadBytes(storageRef, file);
-    return await getDownloadURL(uploadResult.ref);
-  } catch (error) {
-    console.error('Error uploading inspiration:', error);
-    throw error;
-  }
-};
-
 export const logActivity = async (category: string, action: string, details?: string) => {
   const path = 'activity_logs';
   try {

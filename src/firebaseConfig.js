@@ -13,4 +13,9 @@ export const config = {
   firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || import.meta.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID,
 };
 
+// Add this temporary line:
+if (!config.apiKey) {
+  console.error("FIREBASE ERROR: API Key is missing! Check Vercel Env Vars.");
+}
+
 export default config;
