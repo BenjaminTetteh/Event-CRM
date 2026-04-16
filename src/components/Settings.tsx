@@ -7,7 +7,7 @@ import {
   Building2, CreditCard, Bell, Shield, 
   Save, Globe, Mail, Phone, MapPin, 
   Percent, FileText, Camera, Loader2, CheckCircle2,
-  Users, History, AlertCircle, User, UserPlus, X, Send, Clock
+  Users, History, AlertCircle, User, UserPlus, X, Send, Clock, Copy, ExternalLink
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import * as api from '@/src/services/api';
@@ -90,6 +90,15 @@ export default function Settings() {
   const [userLoading, setUserLoading] = React.useState(false);
   const [showInviteForm, setShowInviteForm] = React.useState(false);
   const [inviteData, setInviteData] = React.useState({ email: '', role: 'viewer' });
+  const [lastInvitedEmail, setLastInvitedEmail] = React.useState<string | null>(null);
+
+  const handleCopyInviteLink = (email?: string) => {
+    const appUrl = window.location.origin;
+    const message = `You've been invited to join the team at Event CRM! You can sign in here: ${appUrl}`;
+    navigator.clipboard.writeText(message);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
+  };
 
   React.useEffect(() => {
     fetchSettings();
@@ -131,8 +140,10 @@ export default function Settings() {
     try {
       const newInvite = await api.addInvite(inviteData);
       setInvites(prev => [newInvite, ...prev]);
+      setLastInvitedEmail(inviteData.email);
       setInviteData({ email: '', role: 'viewer' });
-      setShowInviteForm(false);
+      // Don't close immediately if we want to show the "Success" state
+      setTimeout(() => setLastInvitedEmail(null), 10000);
     } catch (error) {
       console.error('Error sending invite:', error);
     } finally {
@@ -564,7 +575,7 @@ export default function Settings() {
                     <motion.div 
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="p-8 bg-stone-50 rounded-4xl border border-stone-100 shadow-sm"
+                      className="p-8 bg-stone-50 rounded-4xl border border-stone-100 shadow-sm space-y-6"
                     >
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                         <div className="md:col-span-1 space-y-2">
@@ -597,10 +608,36 @@ export default function Settings() {
                             className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-stone-900 text-white rounded-2xl font-bold hover:bg-stone-800 transition-all disabled:opacity-50 active:scale-95 shadow-lg shadow-stone-200"
                           >
                             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                            Send Invitation
+                            Grant Access
                           </button>
                         </div>
                       </div>
+
+                      {lastInvitedEmail && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between gap-4"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                              <CheckCircle2 className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-emerald-900">Access Granted to {lastInvitedEmail}</p>
+                              <p className="text-xs text-emerald-600">They can now sign in using Google to join your team.</p>
+                            </div>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => handleCopyInviteLink()}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all active:scale-95 whitespace-nowrap"
+                          >
+                            <Copy className="w-3 h-3" />
+                            Copy Invite Link
+                          </button>
+                        </motion.div>
+                      )}
                     </motion.div>
                   )}
 
@@ -709,13 +746,24 @@ export default function Settings() {
                                     </div>
                                   </div>
                                 </div>
-                                <button 
-                                  type="button"
-                                  onClick={() => handleDeleteInvite(invite.email)}
-                                  className="p-2 text-stone-300 hover:text-red-500 transition-colors"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleCopyInviteLink(invite.email)}
+                                    className="p-2 text-stone-300 hover:text-stone-900 transition-colors"
+                                    title="Copy Invite Link"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleDeleteInvite(invite.email)}
+                                    className="p-2 text-stone-300 hover:text-red-500 transition-colors"
+                                    title="Cancel Invitation"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
