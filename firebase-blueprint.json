@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "A potential client inquiry from the intake portal",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "eventDate": { "type": "string" },
+        "guestCount": { "type": "number" },
+        "budgetRange": { "type": "string" },
+        "venueStatus": { "type": "string" },
+        "isDecisionMaker": { "type": "boolean" },
+        "inspirationLink": { "type": "string" },
+        "eventVibe": { "type": "array", "items": { "type": "string" } },
+        "servicesInterested": { "type": "array", "items": { "type": "string" } },
+        "referralSource": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "reviewed", "quoted", "archived"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientName", "email", "phone", "eventDate", "guestCount", "budgetRange", "status", "createdAt"]
+    },
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "An item available for decor or rental",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "unitPrice": { "type": "number" },
+        "pricingType": { "type": "string", "enum": ["per_unit", "per_guest", "per_table"] }
+      },
+      "required": ["name", "category", "unitPrice", "pricingType"]
+    },
+    "Package": {
+      "title": "Preset Package",
+      "description": "A bundle of inventory items",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": ["name", "items"]
+    },
+    "Quote": {
+      "title": "Quote/Invoice",
+      "description": "A generated quote or invoice for a client",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "quote", "invoice", "paid"] },
+        "discount": { "type": "number" },
+        "applyTax": { "type": "boolean" },
+        "totalAmount": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "termsAndConditions": { "type": "string" },
+        "items": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["status", "totalAmount", "items", "createdAt"]
+    },
+    "Setting": {
+      "title": "App Setting",
+      "description": "Global configuration settings",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "value": { "type": "any" }
+      },
+      "required": ["key", "value"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Application user with roles",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "editor", "viewer"] },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "A record of a significant user action",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "category": { "type": "string", "enum": ["lead", "quote", "inventory", "user", "settings"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "action", "category", "createdAt"]
+    }
+  },
+  "firestore": {
+    "leads": {
+      "schema": "Lead",
+      "description": "Collection of client inquiries"
+    },
+    "inventory": {
+      "schema": "InventoryItem",
+      "description": "Master inventory list"
+    },
+    "packages": {
+      "schema": "Package",
+      "description": "Preset item bundles"
+    },
+    "quotes": {
+      "schema": "Quote",
+      "description": "Generated quotes and invoices"
+    },
+    "settings": {
+      "schema": "Setting",
+      "description": "Application configuration"
+    },
+    "users": {
+      "schema": "User",
+      "description": "Application users"
+    },
+    "activity_logs": {
+      "schema": "ActivityLog",
+      "description": "Audit trail of user actions"
+    }
+  }
+}

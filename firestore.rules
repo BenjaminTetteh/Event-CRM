@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: leads
+    //   - clientName: string (1-100)
+    //   - email: string (valid email)
+    //   - phone: string (1-20)
+    //   - status: enum ['new', 'reviewed', 'quoted', 'archived']
+    //
+    // Collection: inventory
+    //   - name: string (1-100)
+    //   - category: string (1-50)
+    //   - unitPrice: number (>= 0)
+    //
+    // Collection: users
+    //   - email: string (valid email)
+    //   - role: enum ['admin', 'editor', 'viewer']
+    //   - displayName: string (1-100)
+    //
+    // Collection: activity_logs
+    //   - action: string (1-100)
+    //   - category: enum ['lead', 'quote', 'inventory', 'user', 'settings']
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          (request.auth.token.email == "benjamintetteh@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(data, allowedFields) {
+      return data.keys().hasOnly(allowedFields);
+    }
+
+    // Validators
+    function isValidLead(data) {
+      return hasOnlyAllowedFields(data, ['clientName', 'email', 'phone', 'eventDate', 'guestCount', 'budgetRange', 'venueStatus', 'isDecisionMaker', 'inspirationLink', 'eventVibe', 'servicesInterested', 'referralSource', 'status', 'createdAt']) &&
+             data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 100 &&
+             isValidEmail(data.email) &&
+             data.status in ['new', 'reviewed', 'quoted', 'archived'] &&
+             data.createdAt is string;
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(data, ['email', 'role', 'displayName', 'photoURL', 'lastLogin', 'createdAt']) &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'editor', 'viewer'] &&
+             data.displayName is string && data.displayName.size() <= 100;
+    }
+
+    function isValidInventoryItem(data) {
+      return hasOnlyAllowedFields(data, ['name', 'category', 'unitPrice', 'pricingType', 'description', 'imageUrl']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.unitPrice is number && data.unitPrice >= 0;
+    }
+
+    function isValidActivityLog(data) {
+      return hasOnlyAllowedFields(data, ['userId', 'userName', 'action', 'details', 'category', 'createdAt']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.action is string && data.action.size() <= 100 &&
+             data.category in ['lead', 'quote', 'inventory', 'user', 'settings'];
+    }
+
+    // Rules
+    match /leads/{leadId} {
+      allow create: if isValidLead(request.resource.data);
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /inventory/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /packages/{pkgId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /quotes/{quoteId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
+        (request.resource.data.role == 'viewer' || request.auth.token.email == "benjamintetteh@gmail.com");
+      allow update: if isAdmin() || (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role);
+      allow delete: if isAdmin();
+    }
+
+    match /activity_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidActivityLog(request.resource.data);
+    }
+  }
+}
