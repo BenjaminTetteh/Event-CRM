@@ -53,6 +53,7 @@ export default function InventoryManager() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<InventoryItem | null>(null);
   const [editingPackage, setEditingPackage] = React.useState<Package | null>(null);
+  const [selectedPackageItems, setSelectedPackageItems] = React.useState<{ itemId: string; quantity: number }[]>([]);
   const [newCategoryName, setNewCategoryName] = React.useState('');
   const [itemImageUrl, setItemImageUrl] = React.useState('');
 
@@ -84,16 +85,20 @@ export default function InventoryManager() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      if (activeTab === 'items') {
-        const data = await api.getInventory();
-        setInventory((data || []).map((item: any) => ({
-          ...item,
-          quantity: item.stockQuantity || item.quantity || 0,
-          status: (item.stockQuantity || item.quantity || 0) > 50 ? 'In Stock' : (item.stockQuantity || item.quantity || 0) > 0 ? 'Low Stock' : 'Out of Stock'
-        })));
-      } else {
-        const data = await api.getPackages();
-        setPackages(data as Package[] || []);
+      // Always get inventory because it's needed for packages too
+      const [inventoryData, packageData] = await Promise.all([
+        api.getInventory(),
+        activeTab === 'packages' ? api.getPackages() : Promise.resolve([])
+      ]);
+
+      setInventory((inventoryData || []).map((item: any) => ({
+        ...item,
+        quantity: item.stockQuantity || item.quantity || 0,
+        status: (item.stockQuantity || item.quantity || 0) > 50 ? 'In Stock' : (item.stockQuantity || item.quantity || 0) > 0 ? 'Low Stock' : 'Out of Stock'
+      })));
+
+      if (activeTab === 'packages') {
+        setPackages(packageData as Package[] || []);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -130,11 +135,13 @@ export default function InventoryManager() {
         name: editingPackage.name,
         description: editingPackage.description
       });
+      setSelectedPackageItems(editingPackage.items || []);
     } else {
       resetPackage({
         name: '',
         description: ''
       });
+      setSelectedPackageItems([]);
     }
   }, [editingPackage, isPackageModalOpen, resetPackage]);
 
@@ -217,7 +224,7 @@ export default function InventoryManager() {
   const handleSavePackage = async (data: PackageFormData) => {
     const packageData = {
       ...data,
-      items: editingPackage?.items || [],
+      items: selectedPackageItems,
     };
 
     try {
@@ -229,9 +236,23 @@ export default function InventoryManager() {
       fetchData();
       setIsPackageModalOpen(false);
       setEditingPackage(null);
+      setSelectedPackageItems([]);
     } catch (error) {
       console.error('Error saving package:', error);
     }
+  };
+
+  const addItemToPackage = (itemId: string) => {
+    if (selectedPackageItems.find(i => i.itemId === itemId)) return;
+    setSelectedPackageItems(prev => [...prev, { itemId, quantity: 1 }]);
+  };
+
+  const removeItemFromPackage = (itemId: string) => {
+    setSelectedPackageItems(prev => prev.filter(i => i.itemId !== itemId));
+  };
+
+  const updateItemQuantityInPackage = (itemId: string, quantity: number) => {
+    setSelectedPackageItems(prev => prev.map(i => i.itemId === itemId ? { ...i, quantity: Math.max(1, quantity) } : i));
   };
 
   return (
@@ -672,9 +693,88 @@ export default function InventoryManager() {
                     {packageErrors.description && <p className="text-xs text-red-500 font-medium flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {packageErrors.description.message}</p>}
                   </div>
 
-                  <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100">
-                    <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-3">Package Items</p>
-                    <p className="text-sm text-stone-500 italic">In a full version, you would select items from inventory here. For now, this creates the package container.</p>
+                  <div className="space-y-4">
+                    <p className="text-xs font-bold text-stone-400 uppercase tracking-widest px-1">Package Items</p>
+                    
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-300" />
+                      <select 
+                        className="w-full pl-11 pr-4 py-3 rounded-xl border border-stone-200 focus:ring-2 focus:ring-stone-900 focus:border-transparent transition-all text-sm bg-stone-50"
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            addItemToPackage(e.target.value);
+                            e.target.value = '';
+                          }
+                        }}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Add item from inventory...</option>
+                        {inventory.map(item => (
+                          <option key={item.id} value={item.id} disabled={selectedPackageItems.some(i => i.itemId === item.id)}>
+                            {item.name} ({item.category}) - GHc{item.unitPrice}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
+                      {selectedPackageItems.length > 0 ? (
+                        selectedPackageItems.map((pkgItem) => {
+                          const item = inventory.find(i => i.id === pkgItem.itemId);
+                          if (!item) return null;
+                          return (
+                            <motion.div 
+                              layout
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              key={pkgItem.itemId} 
+                              className="flex items-center justify-between p-4 bg-stone-50 rounded-2xl border border-stone-100 group"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-stone-100">
+                                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-stone-900">{item.name}</p>
+                                  <p className="text-[10px] text-stone-400">GHc{item.unitPrice} / unit</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-lg border border-stone-100">
+                                  <button 
+                                    type="button"
+                                    onClick={() => updateItemQuantityInPackage(pkgItem.itemId, pkgItem.quantity - 1)}
+                                    className="p-1 hover:bg-stone-50 rounded text-stone-400 hover:text-stone-900"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="text-xs font-bold w-6 text-center">{pkgItem.quantity}</span>
+                                  <button 
+                                    type="button"
+                                    onClick={() => updateItemQuantityInPackage(pkgItem.itemId, pkgItem.quantity + 1)}
+                                    className="p-1 hover:bg-stone-50 rounded text-stone-400 hover:text-stone-900"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                <button 
+                                  type="button"
+                                  onClick={() => removeItemFromPackage(pkgItem.itemId)}
+                                  className="p-2 text-stone-300 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </motion.div>
+                          );
+                        })
+                      ) : (
+                        <div className="py-10 text-center bg-stone-50/50 rounded-3xl border border-dashed border-stone-200">
+                          <Package className="w-8 h-8 text-stone-200 mx-auto mb-2" />
+                          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">No items added yet</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="pt-4">

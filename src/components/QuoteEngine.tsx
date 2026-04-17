@@ -121,21 +121,25 @@ export default function QuoteEngine() {
         name: item.name,
         category: item.category,
         unitPrice: item.unitPrice,
-        pricingType: item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit'
+        pricingType: (item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit') as any
       })));
 
       setPackages(pkgData.map((pkg: any) => ({
         id: pkg.id,
         name: pkg.name,
         description: pkg.description,
-        items: (pkg.items || []).map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          category: item.category,
-          unitPrice: item.unitPrice,
-          pricingType: item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit',
-          quantity: item.quantity
-        }))
+        items: ((pkg.items as any[]) || []).map((pkgItem: any) => {
+          const item = (invData as any[]).find((i: any) => i.id === (pkgItem.itemId || pkgItem.id));
+          if (!item) return null;
+          return {
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            unitPrice: item.unitPrice,
+            pricingType: (item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit') as any,
+            quantity: pkgItem.quantity || 1
+          };
+        }).filter((i: any) => i !== null)
       })));
 
       setRecentQuotes((quotesData || []).sort((a: any, b: any) => {
