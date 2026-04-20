@@ -1,4 +1,8 @@
 # Event-CRM & Quote Engine
+<img width="32%" alt="Screenshot 2026-04-20 at 00 34 34" src="https://github.com/user-attachments/assets/370142d9-4d08-4399-b0ad-b5ff66786eda" />
+<img width="32%" alt="Screenshot 2026-04-20 at 00 33 07" src="https://github.com/user-attachments/assets/4d4ee212-b2de-440b-9fb6-74bcb16bceb2" />
+<img width="32%" alt="Screenshot 2026-04-20 at 00 36 53" src="https://github.com/user-attachments/assets/aa98a885-6377-489d-b8a6-b2a2e1e6dc4b" />
+
 
 A production business application designed and developed to solve a real operational challenge in event planning: manual quotation generation and fragmented lead management.
 
