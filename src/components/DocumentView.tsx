@@ -233,7 +233,7 @@ export default function DocumentView() {
                   <p className="whitespace-pre-wrap">{quote.termsAndConditions}</p>
                 ) : (
                   <>
-                    <p>1. A 50% non-refundable deposit is required to secure the event date.</p>
+                    <p>1. A non-refundable deposit is required to secure the event date.</p>
                     <p>2. Final payment is due 14 days prior to the event date.</p>
                     <p>3. Any damages to rental items will be billed at replacement cost.</p>
                     <p>4. This {type} is valid for 30 days from the date of issue.</p>
