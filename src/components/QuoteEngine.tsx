@@ -55,6 +55,7 @@ export default function QuoteEngine() {
   const [quoteItems, setQuoteItems] = React.useState<QuoteItem[]>([]);
   const [discount, setDiscount] = React.useState(0);
   const [applyTax, setApplyTax] = React.useState(true);
+  const [amountPaid, setAmountPaid] = React.useState(0);
   const [isSaved, setIsSaved] = React.useState(false);
   const [status, setStatus] = React.useState<QuoteStatus>('quote');
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -121,25 +122,21 @@ export default function QuoteEngine() {
         name: item.name,
         category: item.category,
         unitPrice: item.unitPrice,
-        pricingType: (item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit') as any
+        pricingType: item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit'
       })));
 
       setPackages(pkgData.map((pkg: any) => ({
         id: pkg.id,
         name: pkg.name,
         description: pkg.description,
-        items: ((pkg.items as any[]) || []).map((pkgItem: any) => {
-          const item = (invData as any[]).find((i: any) => i.id === (pkgItem.itemId || pkgItem.id));
-          if (!item) return null;
-          return {
-            id: item.id,
-            name: item.name,
-            category: item.category,
-            unitPrice: item.unitPrice,
-            pricingType: (item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit') as any,
-            quantity: pkgItem.quantity || 1
-          };
-        }).filter((i: any) => i !== null)
+        items: (pkg.items || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          unitPrice: item.unitPrice,
+          pricingType: item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit',
+          quantity: item.quantity
+        }))
       })));
 
       setRecentQuotes((quotesData || []).sort((a: any, b: any) => {
@@ -176,6 +173,7 @@ export default function QuoteEngine() {
           })));
           setDiscount(quote.discount || 0);
           setApplyTax(quote.applyTax ?? true);
+          setAmountPaid(quote.amountPaid || 0);
           setStatus(quote.status);
           setStep('edit-quote');
         }
@@ -252,6 +250,7 @@ export default function QuoteEngine() {
     const taxRate = applyTax ? (Number(settings.tax_rate || 15) / 100) : 0;
     const tax = discountedSubtotal * taxRate;
     const total = discountedSubtotal + tax;
+    const balanceDue = total - amountPaid;
 
     const gold: [number, number, number] = [212, 175, 55]; // #D4AF37
     const stone900: [number, number, number] = [28, 25, 23];
@@ -399,17 +398,17 @@ export default function QuoteEngine() {
     // Summary Box
     doc.setFontSize(10);
     doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-    doc.text('Subtotal:', 135, finalY + 5);
+    doc.text('Subtotal:', 120, finalY + 5);
     doc.text(`GHc ${subtotal.toLocaleString()}`, 190, finalY + 5, { align: 'right' });
     
     if (discount > 0) {
-      doc.text(`Discount (${discount}%):`, 135, finalY + 12);
+      doc.text(`Discount (${discount}%):`, 120, finalY + 12);
       doc.text(`- GHc ${discountAmount.toLocaleString()}`, 190, finalY + 12, { align: 'right' });
     }
     
     const taxY = discount > 0 ? finalY + 19 : finalY + 12;
     if (applyTax) {
-      doc.text(`Tax (${taxRate * 100}%):`, 135, taxY);
+      doc.text(`Tax (${taxRate * 100}%):`, 120, taxY);
       doc.text(`GHc ${tax.toLocaleString()}`, 190, taxY, { align: 'right' });
     }
     
@@ -418,8 +417,20 @@ export default function QuoteEngine() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(stone900[0], stone900[1], stone900[2]);
-    doc.text('Total Amount:', 135, totalY);
+    doc.text('Total Amount:', 120, totalY);
     doc.text(`GHc ${total.toLocaleString()}`, 190, totalY, { align: 'right' });
+
+    if (amountPaid > 0) {
+      doc.setFontSize(11);
+      doc.setTextColor(stone500[0], stone500[1], stone500[2]);
+      doc.text('Amount Paid:', 120, totalY + 8);
+      doc.text(`- GHc ${amountPaid.toLocaleString()}`, 190, totalY + 8, { align: 'right' });
+
+      doc.setFontSize(14);
+      doc.setTextColor(stone900[0], stone900[1], stone900[2]);
+      doc.text('Balance Due:', 120, totalY + 18);
+      doc.text(`GHc ${balanceDue.toLocaleString()}`, 190, totalY + 18, { align: 'right' });
+    }
 
     // --- Terms & Footer ---
     doc.setFontSize(9);
@@ -477,6 +488,7 @@ export default function QuoteEngine() {
         status: 'draft',
         discount: discount,
         applyTax: applyTax,
+        amountPaid: amountPaid,
         totalAmount: totalAmount,
         taxAmount: taxAmount,
         termsAndConditions: settings.default_terms || '',
@@ -531,6 +543,7 @@ export default function QuoteEngine() {
         status: status === 'draft' ? 'quote' : status,
         discount: discount,
         applyTax: applyTax,
+        amountPaid: amountPaid,
         totalAmount: totalAmount,
         taxAmount: taxAmount,
         termsAndConditions: settings.default_terms || '',
@@ -1072,13 +1085,35 @@ export default function QuoteEngine() {
                 </div>
               </div>
 
-              <div className="pt-8 border-t border-white/10">
+              <div className="pt-8 border-t border-white/10 space-y-6">
                 <div className="flex flex-col gap-2">
                   <span className="text-stone-500 text-[9px] font-black uppercase tracking-[0.3em]">Grand Total</span>
                   <span className="text-5xl font-serif font-bold text-white tracking-tighter">
                     <span className="text-2xl text-stone-600 mr-2 font-sans font-medium">GHc</span>
                     {((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? Number(settings.tax_rate || 15) / 100 : 0))).toLocaleString()}
                   </span>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-white/5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">Amount Paid</span>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number"
+                        min="0"
+                        value={amountPaid}
+                        onChange={(e) => setAmountPaid(Math.max(0, Number(e.target.value)))}
+                        className="w-24 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-right text-xs font-black text-white focus:ring-2 focus:ring-white/20 transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-[0.2rem]">Balance Due</span>
+                    <span className="text-xl font-black text-amber-500 font-mono">
+                      GHc {Math.max(0, ((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? Number(settings.tax_rate || 15) / 100 : 0))) - amountPaid).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1255,6 +1290,21 @@ export default function QuoteEngine() {
                             ).toLocaleString()}
                           </span>
                         </div>
+
+                        {amountPaid > 0 && (
+                          <div className="space-y-3 pt-3">
+                            <div className="flex justify-between text-sm text-stone-500">
+                              <span className="uppercase tracking-widest text-[10px] font-bold">Amount Paid</span>
+                              <span className="font-bold">- GHc {amountPaid.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-3 border-t border-stone-100">
+                              <span className="text-stone-900 font-bold uppercase tracking-widest text-xs">Balance Due</span>
+                              <span className="text-xl font-bold text-amber-600">
+                                GHc {Math.max(0, ((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? (Number(settings.tax_rate || 15) / 100) : 0))) - amountPaid).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

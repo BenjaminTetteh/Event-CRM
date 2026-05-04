@@ -196,8 +196,20 @@ export default function DocumentView() {
                 </div>
                 <div className="pt-6 border-t-2 border-stone-900 flex justify-between items-center">
                   <span className="text-stone-900 font-bold uppercase tracking-widest text-[10px]">Total Amount</span>
-                  <span className="text-3xl font-serif font-bold text-stone-900 tracking-tighter">GHc {quote.totalAmount.toLocaleString()}</span>
+                  <span className="text-3xl font-serif font-bold text-stone-900 tracking-tighter">GHc {quote.totalAmount?.toLocaleString()}</span>
                 </div>
+                {quote.amountPaid > 0 && (
+                  <div className="pt-4 space-y-4">
+                    <div className="flex justify-between text-xs font-medium text-stone-400">
+                      <span className="uppercase tracking-widest">Amount Paid</span>
+                      <span className="font-bold text-stone-600 font-mono">- GHc {quote.amountPaid?.toLocaleString()}</span>
+                    </div>
+                    <div className="pt-4 border-t border-stone-100 flex justify-between items-center">
+                      <span className="text-stone-900 font-bold uppercase tracking-widest text-[10px]">Balance Due</span>
+                      <span className="text-2xl font-serif font-bold text-amber-600 tracking-tighter">GHc {(quote.totalAmount - quote.amountPaid).toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
