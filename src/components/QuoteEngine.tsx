@@ -55,6 +55,7 @@ export default function QuoteEngine() {
   const [quoteItems, setQuoteItems] = React.useState<QuoteItem[]>([]);
   const [discount, setDiscount] = React.useState(0);
   const [applyTax, setApplyTax] = React.useState(true);
+  const [amountPaid, setAmountPaid] = React.useState(0);
   const [isSaved, setIsSaved] = React.useState(false);
   const [status, setStatus] = React.useState<QuoteStatus>('quote');
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -121,25 +122,21 @@ export default function QuoteEngine() {
         name: item.name,
         category: item.category,
         unitPrice: item.unitPrice,
-        pricingType: (item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit') as any
+        pricingType: item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit'
       })));
 
       setPackages(pkgData.map((pkg: any) => ({
         id: pkg.id,
         name: pkg.name,
         description: pkg.description,
-        items: ((pkg.items as any[]) || []).map((pkgItem: any) => {
-          const item = (invData as any[]).find((i: any) => i.id === (pkgItem.itemId || pkgItem.id));
-          if (!item) return null;
-          return {
-            id: item.id,
-            name: item.name,
-            category: item.category,
-            unitPrice: item.unitPrice,
-            pricingType: (item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit') as any,
-            quantity: pkgItem.quantity || 1
-          };
-        }).filter((i: any) => i !== null)
+        items: (pkg.items || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          unitPrice: item.unitPrice,
+          pricingType: item.category === 'Tableware' ? 'per_guest' : item.category === 'Linens' ? 'per_table' : 'per_unit',
+          quantity: item.quantity
+        }))
       })));
 
       setRecentQuotes((quotesData || []).sort((a: any, b: any) => {
@@ -176,6 +173,7 @@ export default function QuoteEngine() {
           })));
           setDiscount(quote.discount || 0);
           setApplyTax(quote.applyTax ?? true);
+          setAmountPaid(quote.amountPaid || 0);
           setStatus(quote.status);
           setStep('edit-quote');
         }
@@ -252,6 +250,7 @@ export default function QuoteEngine() {
     const taxRate = applyTax ? (Number(settings.tax_rate || 15) / 100) : 0;
     const tax = discountedSubtotal * taxRate;
     const total = discountedSubtotal + tax;
+    const balanceDue = total - amountPaid;
 
     const gold: [number, number, number] = [212, 175, 55]; // #D4AF37
     const stone900: [number, number, number] = [28, 25, 23];
@@ -394,65 +393,104 @@ export default function QuoteEngine() {
     });
 
     // --- Summary ---
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    let currentY = (doc as any).lastAutoTable.finalY + 15;
     
     // Summary Box
     doc.setFontSize(10);
     doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-    doc.text('Subtotal:', 135, finalY + 5);
-    doc.text(`GHc ${subtotal.toLocaleString()}`, 190, finalY + 5, { align: 'right' });
+    doc.text('Subtotal:', 110, currentY + 5);
+    doc.text(`GHc ${subtotal.toLocaleString()}`, 190, currentY + 5, { align: 'right' });
+    currentY += 7;
     
     if (discount > 0) {
-      doc.text(`Discount (${discount}%):`, 135, finalY + 12);
-      doc.text(`- GHc ${discountAmount.toLocaleString()}`, 190, finalY + 12, { align: 'right' });
+      doc.text(`Discount (${discount}%):`, 110, currentY + 5);
+      doc.text(`- GHc ${discountAmount.toLocaleString()}`, 190, currentY + 5, { align: 'right' });
+      currentY += 7;
     }
     
-    const taxY = discount > 0 ? finalY + 19 : finalY + 12;
     if (applyTax) {
-      doc.text(`Tax (${taxRate * 100}%):`, 135, taxY);
-      doc.text(`GHc ${tax.toLocaleString()}`, 190, taxY, { align: 'right' });
+      doc.text(`Tax (${taxRate * 100}%):`, 110, currentY + 5);
+      doc.text(`GHc ${tax.toLocaleString()}`, 190, currentY + 5, { align: 'right' });
+      currentY += 7;
     }
     
-    const totalY = (discount > 0 && applyTax) ? finalY + 32 : (discount > 0 || applyTax) ? finalY + 25 : finalY + 18;
-    
+    currentY += 5; // Gap before total
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(stone900[0], stone900[1], stone900[2]);
-    doc.text('Total Amount:', 135, totalY);
-    doc.text(`GHc ${total.toLocaleString()}`, 190, totalY, { align: 'right' });
+    doc.text('Total Amount:', 110, currentY);
+    doc.text(`GHc ${total.toLocaleString()}`, 190, currentY, { align: 'right' });
 
-    // --- Terms & Footer ---
+    if (amountPaid > 0) {
+      currentY += 8;
+      doc.setFontSize(11);
+      doc.setTextColor(stone500[0], stone500[1], stone500[2]);
+      doc.text('Amount Paid:', 110, currentY);
+      doc.text(`- GHc ${amountPaid.toLocaleString()}`, 190, currentY, { align: 'right' });
+
+      currentY += 10;
+      doc.setFontSize(14);
+      doc.setTextColor(stone900[0], stone900[1], stone900[2]);
+      doc.text('Balance Due:', 110, currentY);
+      doc.text(`GHc ${balanceDue.toLocaleString()}`, 190, currentY, { align: 'right' });
+    }
+
+    // --- Terms & Conditions ---
+    currentY += 20;
+
+    const termsText = settings.default_terms || '1. A 50% non-refundable deposit is required to secure the date.\n2. Balance is due 14 days prior to the event.\n3. Any damages to rental items will be billed to the client.';
+    const splitTerms = doc.splitTextToSize(termsText, 170); // 170mm width (190 - 20)
+    
+    // Check if we need a new page for terms heading
+    if (currentY > 240) {
+      doc.addPage();
+      currentY = 30;
+    }
+
     doc.setFontSize(9);
     doc.setTextColor(stone900[0], stone900[1], stone900[2]);
     doc.setFont('helvetica', 'bold');
-    doc.text('Terms & Conditions', 20, finalY + 50);
-    
+    doc.text('Terms & Conditions', 20, currentY);
+    currentY += 7;
+
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-    const terms = settings.default_terms ? settings.default_terms.split('\n') : [
-      '1. A 50% non-refundable deposit is required to secure the date.',
-      '2. Balance is due 14 days prior to the event.',
-      '3. Any damages to rental items will be billed to the client.'
-    ];
-    terms.forEach((line: string, i: number) => doc.text(line, 20, finalY + 56 + (i * 5)));
-
-    // Footer Message
-    const footerMsg = settings.quote_footer || `Thank you for choosing ${savedName}.`;
     
-    // Subtle Gold Branding Line at bottom
-    doc.setDrawColor(gold[0], gold[1], gold[2]);
-    doc.setLineWidth(0.5);
-    doc.line(20, 280, 190, 280);
+    splitTerms.forEach((line: string) => {
+      if (currentY > 265) {
+        doc.addPage();
+        currentY = 30;
+      }
+      doc.text(line, 20, currentY);
+      currentY += 5;
+    });
 
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-    doc.text(footerMsg, 105, 285, { align: 'center' });
+    // --- Footer Logic ---
+    const footerMsg = settings.quote_footer || `Thank you for choosing ${savedName}.`;
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        
+        // Subtle Gold Branding Line at bottom
+        doc.setDrawColor(gold[0], gold[1], gold[2]);
+        doc.setLineWidth(0.5);
+        doc.line(20, 280, 190, 280);
 
-    // Footer Branding
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text(savedName.toUpperCase(), 105, 290, { align: 'center' });
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(stone500[0], stone500[1], stone500[2]);
+        doc.text(footerMsg, 105, 285, { align: 'center' });
+
+        // Footer Branding
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text(savedName.toUpperCase(), 105, 290, { align: 'center' });
+        
+        // Page Numbering
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Page ${i} of ${totalPages}`, 190, 290, { align: 'right' });
+    }
 
     doc.save(`${status}_${clientName.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
   };
@@ -477,6 +515,7 @@ export default function QuoteEngine() {
         status: 'draft',
         discount: discount,
         applyTax: applyTax,
+        amountPaid: amountPaid,
         totalAmount: totalAmount,
         taxAmount: taxAmount,
         termsAndConditions: settings.default_terms || '',
@@ -531,6 +570,7 @@ export default function QuoteEngine() {
         status: status === 'draft' ? 'quote' : status,
         discount: discount,
         applyTax: applyTax,
+        amountPaid: amountPaid,
         totalAmount: totalAmount,
         taxAmount: taxAmount,
         termsAndConditions: settings.default_terms || '',
@@ -1072,13 +1112,35 @@ export default function QuoteEngine() {
                 </div>
               </div>
 
-              <div className="pt-8 border-t border-white/10">
+              <div className="pt-8 border-t border-white/10 space-y-6">
                 <div className="flex flex-col gap-2">
                   <span className="text-stone-500 text-[9px] font-black uppercase tracking-[0.3em]">Grand Total</span>
                   <span className="text-5xl font-serif font-bold text-white tracking-tighter">
                     <span className="text-2xl text-stone-600 mr-2 font-sans font-medium">GHc</span>
                     {((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? Number(settings.tax_rate || 15) / 100 : 0))).toLocaleString()}
                   </span>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-white/5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">Amount Paid</span>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number"
+                        min="0"
+                        value={amountPaid}
+                        onChange={(e) => setAmountPaid(Math.max(0, Number(e.target.value)))}
+                        className="w-24 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-right text-xs font-black text-white focus:ring-2 focus:ring-white/20 transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-[0.2rem]">Balance Due</span>
+                    <span className="text-xl font-black text-amber-500 font-mono">
+                      GHc {Math.max(0, ((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? Number(settings.tax_rate || 15) / 100 : 0))) - amountPaid).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1255,6 +1317,21 @@ export default function QuoteEngine() {
                             ).toLocaleString()}
                           </span>
                         </div>
+
+                        {amountPaid > 0 && (
+                          <div className="space-y-3 pt-3">
+                            <div className="flex justify-between text-sm text-stone-500">
+                              <span className="uppercase tracking-widest text-[10px] font-bold">Amount Paid</span>
+                              <span className="font-bold">- GHc {amountPaid.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-3 border-t border-stone-100">
+                              <span className="text-stone-900 font-bold uppercase tracking-widest text-xs">Balance Due</span>
+                              <span className="text-xl font-bold text-amber-600">
+                                GHc {Math.max(0, ((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? (Number(settings.tax_rate || 15) / 100) : 0))) - amountPaid).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

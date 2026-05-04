@@ -54,6 +54,7 @@
         "status": { "type": "string", "enum": ["draft", "quote", "invoice", "paid"] },
         "discount": { "type": "number" },
         "applyTax": { "type": "boolean" },
+        "amountPaid": { "type": "number" },
         "totalAmount": { "type": "number" },
         "taxAmount": { "type": "number" },
         "termsAndConditions": { "type": "string" },
