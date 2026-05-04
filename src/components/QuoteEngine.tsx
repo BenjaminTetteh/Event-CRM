@@ -393,77 +393,104 @@ export default function QuoteEngine() {
     });
 
     // --- Summary ---
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    let currentY = (doc as any).lastAutoTable.finalY + 15;
     
     // Summary Box
     doc.setFontSize(10);
     doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-    doc.text('Subtotal:', 120, finalY + 5);
-    doc.text(`GHc ${subtotal.toLocaleString()}`, 190, finalY + 5, { align: 'right' });
+    doc.text('Subtotal:', 110, currentY + 5);
+    doc.text(`GHc ${subtotal.toLocaleString()}`, 190, currentY + 5, { align: 'right' });
+    currentY += 7;
     
     if (discount > 0) {
-      doc.text(`Discount (${discount}%):`, 120, finalY + 12);
-      doc.text(`- GHc ${discountAmount.toLocaleString()}`, 190, finalY + 12, { align: 'right' });
+      doc.text(`Discount (${discount}%):`, 110, currentY + 5);
+      doc.text(`- GHc ${discountAmount.toLocaleString()}`, 190, currentY + 5, { align: 'right' });
+      currentY += 7;
     }
     
-    const taxY = discount > 0 ? finalY + 19 : finalY + 12;
     if (applyTax) {
-      doc.text(`Tax (${taxRate * 100}%):`, 120, taxY);
-      doc.text(`GHc ${tax.toLocaleString()}`, 190, taxY, { align: 'right' });
+      doc.text(`Tax (${taxRate * 100}%):`, 110, currentY + 5);
+      doc.text(`GHc ${tax.toLocaleString()}`, 190, currentY + 5, { align: 'right' });
+      currentY += 7;
     }
     
-    const totalY = (discount > 0 && applyTax) ? finalY + 32 : (discount > 0 || applyTax) ? finalY + 25 : finalY + 18;
-    
+    currentY += 5; // Gap before total
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(stone900[0], stone900[1], stone900[2]);
-    doc.text('Total Amount:', 120, totalY);
-    doc.text(`GHc ${total.toLocaleString()}`, 190, totalY, { align: 'right' });
+    doc.text('Total Amount:', 110, currentY);
+    doc.text(`GHc ${total.toLocaleString()}`, 190, currentY, { align: 'right' });
 
     if (amountPaid > 0) {
+      currentY += 8;
       doc.setFontSize(11);
       doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-      doc.text('Amount Paid:', 120, totalY + 8);
-      doc.text(`- GHc ${amountPaid.toLocaleString()}`, 190, totalY + 8, { align: 'right' });
+      doc.text('Amount Paid:', 110, currentY);
+      doc.text(`- GHc ${amountPaid.toLocaleString()}`, 190, currentY, { align: 'right' });
 
+      currentY += 10;
       doc.setFontSize(14);
       doc.setTextColor(stone900[0], stone900[1], stone900[2]);
-      doc.text('Balance Due:', 120, totalY + 18);
-      doc.text(`GHc ${balanceDue.toLocaleString()}`, 190, totalY + 18, { align: 'right' });
+      doc.text('Balance Due:', 110, currentY);
+      doc.text(`GHc ${balanceDue.toLocaleString()}`, 190, currentY, { align: 'right' });
     }
 
-    // --- Terms & Footer ---
+    // --- Terms & Conditions ---
+    currentY += 20;
+
+    const termsText = settings.default_terms || '1. A 50% non-refundable deposit is required to secure the date.\n2. Balance is due 14 days prior to the event.\n3. Any damages to rental items will be billed to the client.';
+    const splitTerms = doc.splitTextToSize(termsText, 170); // 170mm width (190 - 20)
+    
+    // Check if we need a new page for terms heading
+    if (currentY > 240) {
+      doc.addPage();
+      currentY = 30;
+    }
+
     doc.setFontSize(9);
     doc.setTextColor(stone900[0], stone900[1], stone900[2]);
     doc.setFont('helvetica', 'bold');
-    doc.text('Terms & Conditions', 20, finalY + 50);
-    
+    doc.text('Terms & Conditions', 20, currentY);
+    currentY += 7;
+
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-    const terms = settings.default_terms ? settings.default_terms.split('\n') : [
-      '1. A 50% non-refundable deposit is required to secure the date.',
-      '2. Balance is due 14 days prior to the event.',
-      '3. Any damages to rental items will be billed to the client.'
-    ];
-    terms.forEach((line: string, i: number) => doc.text(line, 20, finalY + 56 + (i * 5)));
-
-    // Footer Message
-    const footerMsg = settings.quote_footer || `Thank you for choosing ${savedName}.`;
     
-    // Subtle Gold Branding Line at bottom
-    doc.setDrawColor(gold[0], gold[1], gold[2]);
-    doc.setLineWidth(0.5);
-    doc.line(20, 280, 190, 280);
+    splitTerms.forEach((line: string) => {
+      if (currentY > 265) {
+        doc.addPage();
+        currentY = 30;
+      }
+      doc.text(line, 20, currentY);
+      currentY += 5;
+    });
 
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-    doc.text(footerMsg, 105, 285, { align: 'center' });
+    // --- Footer Logic ---
+    const footerMsg = settings.quote_footer || `Thank you for choosing ${savedName}.`;
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        
+        // Subtle Gold Branding Line at bottom
+        doc.setDrawColor(gold[0], gold[1], gold[2]);
+        doc.setLineWidth(0.5);
+        doc.line(20, 280, 190, 280);
 
-    // Footer Branding
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text(savedName.toUpperCase(), 105, 290, { align: 'center' });
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(stone500[0], stone500[1], stone500[2]);
+        doc.text(footerMsg, 105, 285, { align: 'center' });
+
+        // Footer Branding
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text(savedName.toUpperCase(), 105, 290, { align: 'center' });
+        
+        // Page Numbering
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Page ${i} of ${totalPages}`, 190, 290, { align: 'right' });
+    }
 
     doc.save(`${status}_${clientName.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
   };
