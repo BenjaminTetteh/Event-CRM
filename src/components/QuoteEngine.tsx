@@ -750,14 +750,31 @@ export default function QuoteEngine() {
                       <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                         <FileText className="w-6 h-6 text-amber-600" />
                       </div>
-                      <span className={cn(
-                        "text-[8px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest",
-                        quote.status === 'draft' ? "bg-amber-100 text-amber-700" :
-                        quote.status === 'paid' ? "bg-emerald-100 text-emerald-700" :
-                        "bg-stone-100 text-stone-600"
-                      )}>
-                        {quote.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-[8px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest",
+                          quote.status === 'draft' ? "bg-amber-100 text-amber-700" :
+                          quote.status === 'paid' ? "bg-emerald-100 text-emerald-700" :
+                          "bg-stone-100 text-stone-600"
+                        )}>
+                          {quote.status}
+                        </span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Are you sure you want to delete this quote?')) {
+                              api.deleteQuote(quote.id).then(() => {
+                                setRecentQuotes(prev => prev.filter(q => q.id !== quote.id));
+                                setToast({ message: 'Quote deleted successfully', type: 'success' });
+                              });
+                            }
+                          }}
+                          className="p-2 hover:bg-red-50 hover:text-red-600 text-stone-300 rounded-lg transition-colors"
+                          title="Delete Quote"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                     
                     <h3 className="font-bold text-stone-900 text-lg mb-1 group-hover:text-amber-700 transition-colors line-clamp-1">{quote.clientName}</h3>
@@ -1197,9 +1214,41 @@ export default function QuoteEngine() {
                   {paymentHistory.length > 0 && (
                     <div className="max-h-32 overflow-y-auto space-y-2 pr-2 scrollbar-hide py-2">
                       {paymentHistory.map((p, i) => (
-                        <div key={i} className="flex justify-between items-start text-[10px] text-stone-500 font-medium">
-                          <span>{new Date(p.date).toLocaleDateString()} - {p.method}</span>
-                          <span className="font-bold text-white">GHc {p.amount.toLocaleString()}</span>
+                        <div key={i} className="flex justify-between items-center text-[10px] text-stone-500 font-medium group/payment">
+                          <div className="flex-1">
+                            <span className="block font-bold text-white">{new Date(p.date).toLocaleDateString()} - {p.method}</span>
+                            <span>GHc {p.amount.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover/payment:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => {
+                                const newAmount = prompt('Edit payment amount:', p.amount.toString());
+                                if (newAmount && !isNaN(Number(newAmount))) {
+                                  const val = Number(newAmount);
+                                  const method = prompt('Edit Payment Method:', p.method) || p.method;
+                                  const updatedHistory = [...paymentHistory];
+                                  updatedHistory[i] = { ...p, amount: val, method };
+                                  setPaymentHistory(updatedHistory);
+                                  setAmountPaid(updatedHistory.reduce((sum, current) => sum + current.amount, 0));
+                                }
+                              }}
+                              className="p-1 hover:bg-white/10 rounded-md text-stone-400 hover:text-white transition-colors"
+                            >
+                              <FileText className="w-3 h-3" />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                if (confirm('Delete this payment record?')) {
+                                  const updatedHistory = paymentHistory.filter((_, idx) => idx !== i);
+                                  setPaymentHistory(updatedHistory);
+                                  setAmountPaid(updatedHistory.reduce((sum, current) => sum + current.amount, 0));
+                                }
+                              }}
+                              className="p-1 hover:bg-red-500/10 rounded-md text-stone-400 hover:text-red-400 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
