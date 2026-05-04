@@ -38,6 +38,12 @@ interface QuoteItem extends InventoryItem {
   quantity: number;
 }
 
+interface PaymentRecord {
+  amount: number;
+  date: string;
+  method?: string;
+}
+
 interface PresetPackage {
   id: string;
   name: string;
@@ -56,6 +62,7 @@ export default function QuoteEngine() {
   const [discount, setDiscount] = React.useState(0);
   const [applyTax, setApplyTax] = React.useState(true);
   const [amountPaid, setAmountPaid] = React.useState(0);
+  const [paymentHistory, setPaymentHistory] = React.useState<PaymentRecord[]>([]);
   const [isSaved, setIsSaved] = React.useState(false);
   const [status, setStatus] = React.useState<QuoteStatus>('quote');
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -174,6 +181,7 @@ export default function QuoteEngine() {
           setDiscount(quote.discount || 0);
           setApplyTax(quote.applyTax ?? true);
           setAmountPaid(quote.amountPaid || 0);
+          setPaymentHistory(quote.paymentHistory || []);
           setStatus(quote.status);
           setStep('edit-quote');
         }
@@ -435,25 +443,61 @@ export default function QuoteEngine() {
       doc.text(`GHc ${balanceDue.toLocaleString()}`, 190, currentY, { align: 'right' });
     }
 
-    // --- Terms & Conditions ---
-    currentY += 20;
+    // --- Payment History (New) ---
+    if (paymentHistory.length > 0) {
+      currentY += 15;
+      
+      // Check if we need space for payment history
+      if (currentY > 240) {
+        doc.setFontSize(8);
+        doc.setTextColor(gold[0], gold[1], gold[2]);
+        doc.text('PAYMENT HISTORY CONTINUED ON NEXT PAGE...', 105, 275, { align: 'center' });
+        doc.addPage();
+        currentY = 30;
+      }
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(stone900[0], stone900[1], stone900[2]);
+      doc.text('PAYMENT HISTORY', 20, currentY);
+      currentY += 6;
+
+      paymentHistory.forEach((payment, idx) => {
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(stone500[0], stone500[1], stone500[2]);
+        const dateStr = new Date(payment.date).toLocaleDateString();
+        doc.text(`${dateStr} - ${payment.method || 'Payment'}`, 20, currentY);
+        doc.text(`GHc ${payment.amount.toLocaleString()}`, 190, currentY, { align: 'right' });
+        currentY += 5;
+        
+        if (currentY > 260 && idx < paymentHistory.length - 1) {
+          doc.addPage();
+          currentY = 30;
+        }
+      });
+    }
+
+    // --- Terms & Conditions (FORCED TO NEW PAGE) ---
+    doc.setFontSize(8);
+    doc.setTextColor(gold[0], gold[1], gold[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TERMS & CONDITIONS ON FINAL PAGE', 105, 275, { align: 'center' });
+    
+    doc.addPage();
+    currentY = 30;
 
     const termsText = settings.default_terms || '1. A 50% non-refundable deposit is required to secure the date.\n2. Balance is due 14 days prior to the event.\n3. Any damages to rental items will be billed to the client.';
     const splitTerms = doc.splitTextToSize(termsText, 170); // 170mm width (190 - 20)
     
-    // Check if we need a new page for terms heading
-    if (currentY > 240) {
-      doc.addPage();
-      currentY = 30;
-    }
-
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setTextColor(stone900[0], stone900[1], stone900[2]);
     doc.setFont('helvetica', 'bold');
     doc.text('Terms & Conditions', 20, currentY);
-    currentY += 7;
+    currentY += 10;
 
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
     doc.setTextColor(stone500[0], stone500[1], stone500[2]);
     
     splitTerms.forEach((line: string) => {
@@ -462,7 +506,7 @@ export default function QuoteEngine() {
         currentY = 30;
       }
       doc.text(line, 20, currentY);
-      currentY += 5;
+      currentY += 6; // Increased line spacing for better readability
     });
 
     // --- Footer Logic ---
@@ -516,6 +560,7 @@ export default function QuoteEngine() {
         discount: discount,
         applyTax: applyTax,
         amountPaid: amountPaid,
+        paymentHistory: paymentHistory,
         totalAmount: totalAmount,
         taxAmount: taxAmount,
         termsAndConditions: settings.default_terms || '',
@@ -571,6 +616,7 @@ export default function QuoteEngine() {
         discount: discount,
         applyTax: applyTax,
         amountPaid: amountPaid,
+        paymentHistory: paymentHistory,
         totalAmount: totalAmount,
         taxAmount: taxAmount,
         termsAndConditions: settings.default_terms || '',
@@ -1122,20 +1168,44 @@ export default function QuoteEngine() {
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-white/5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">Amount Paid</span>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        type="number"
-                        min="0"
-                        value={amountPaid}
-                        onChange={(e) => setAmountPaid(Math.max(0, Number(e.target.value)))}
-                        className="w-24 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-right text-xs font-black text-white focus:ring-2 focus:ring-white/20 transition-all font-mono"
-                      />
+                  <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10">
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest block">Total Paid History</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-bold text-white">GHc {amountPaid.toLocaleString()}</span>
+                        <span className="text-[10px] text-stone-600 font-bold uppercase">{paymentHistory.length} Payments</span>
+                      </div>
                     </div>
+                    <button 
+                      onClick={() => {
+                        const amount = prompt('Enter payment amount:');
+                        if (amount && !isNaN(Number(amount))) {
+                          const val = Number(amount);
+                          const method = prompt('Payment Method (e.g. Cash, Mobile Money, Bank Transfer):') || 'Payment';
+                          const newRecord = { amount: val, date: new Date().toISOString(), method };
+                          setPaymentHistory([...paymentHistory, newRecord]);
+                          setAmountPaid(prev => prev + val);
+                        }
+                      }}
+                      className="p-3 bg-white/10 hover:bg-white text-white hover:text-stone-900 rounded-xl transition-all active:scale-95 group"
+                      title="Record Payment"
+                    >
+                      <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                    </button>
                   </div>
                   
-                  <div className="flex justify-between items-center">
+                  {paymentHistory.length > 0 && (
+                    <div className="max-h-32 overflow-y-auto space-y-2 pr-2 scrollbar-hide py-2">
+                      {paymentHistory.map((p, i) => (
+                        <div key={i} className="flex justify-between items-start text-[10px] text-stone-500 font-medium">
+                          <span>{new Date(p.date).toLocaleDateString()} - {p.method}</span>
+                          <span className="font-bold text-white">GHc {p.amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-2">
                     <span className="text-[10px] font-bold text-amber-500 uppercase tracking-[0.2rem]">Balance Due</span>
                     <span className="text-xl font-black text-amber-500 font-mono">
                       GHc {Math.max(0, ((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? Number(settings.tax_rate || 15) / 100 : 0))) - amountPaid).toLocaleString()}
@@ -1324,6 +1394,18 @@ export default function QuoteEngine() {
                               <span className="uppercase tracking-widest text-[10px] font-bold">Amount Paid</span>
                               <span className="font-bold">- GHc {amountPaid.toLocaleString()}</span>
                             </div>
+                            
+                            {paymentHistory.length > 0 && (
+                              <div className="space-y-1 pl-4 border-l-2 border-stone-100 italic">
+                                {paymentHistory.map((p, i) => (
+                                  <div key={i} className="flex justify-between text-[10px] text-stone-400">
+                                    <span>{new Date(p.date).toLocaleDateString()} - {p.method}</span>
+                                    <span>GHc {p.amount.toLocaleString()}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
                             <div className="flex justify-between items-center pt-3 border-t border-stone-100">
                               <span className="text-stone-900 font-bold uppercase tracking-widest text-xs">Balance Due</span>
                               <span className="text-xl font-bold text-amber-600">

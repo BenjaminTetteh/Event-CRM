@@ -55,6 +55,17 @@
         "discount": { "type": "number" },
         "applyTax": { "type": "boolean" },
         "amountPaid": { "type": "number" },
+        "paymentHistory": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "amount": { "type": "number" },
+              "date": { "type": "string", "format": "date-time" },
+              "method": { "type": "string" }
+            }
+          }
+        },
         "totalAmount": { "type": "number" },
         "taxAmount": { "type": "number" },
         "termsAndConditions": { "type": "string" },
