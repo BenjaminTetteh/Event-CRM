@@ -205,16 +205,14 @@ export default function DocumentView() {
                       <span className="font-bold text-stone-600 font-mono">- GHc {quote.amountPaid?.toLocaleString()}</span>
                     </div>
 
-                    {quote.paymentHistory && quote.paymentHistory.length > 0 && (
-                      <div className="space-y-2 pl-4 border-l-2 border-stone-100 italic">
-                        {quote.paymentHistory.map((p: any, i: number) => (
-                          <div key={i} className="flex justify-between text-[10px] text-stone-400">
-                            <span>{new Date(p.date).toLocaleDateString()} - {p.method}</span>
-                            <span>GHc {p.amount.toLocaleString()}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <div className="space-y-2 pl-4 border-l-2 border-stone-100 italic">
+                      {quote.paymentHistory.map((p: any, i: number) => (
+                        <div key={i} className="flex justify-between text-[10px] text-stone-400">
+                          <span>Payment {i + 1}</span>
+                          <span className="font-bold text-stone-600">GHc {p.amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
 
                     <div className="pt-4 border-t border-stone-100 flex justify-between items-center">
                       <span className="text-stone-900 font-bold uppercase tracking-widest text-[10px]">Balance Due</span>

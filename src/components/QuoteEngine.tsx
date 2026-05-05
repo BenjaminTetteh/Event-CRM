@@ -466,8 +466,7 @@ export default function QuoteEngine() {
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(stone500[0], stone500[1], stone500[2]);
-        const dateStr = new Date(payment.date).toLocaleDateString();
-        doc.text(`${dateStr} - ${payment.method || 'Payment'}`, 20, currentY);
+        doc.text(`Payment ${idx + 1}`, 20, currentY);
         doc.text(`GHc ${payment.amount.toLocaleString()}`, 190, currentY, { align: 'right' });
         currentY += 5;
         
@@ -1176,21 +1175,23 @@ export default function QuoteEngine() {
               </div>
 
               <div className="pt-8 border-t border-white/10 space-y-6">
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1">
                   <span className="text-stone-500 text-[9px] font-black uppercase tracking-[0.3em]">Grand Total</span>
-                  <span className="text-5xl font-serif font-bold text-white tracking-tighter">
-                    <span className="text-2xl text-stone-600 mr-2 font-sans font-medium">GHc</span>
-                    {((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? Number(settings.tax_rate || 15) / 100 : 0))).toLocaleString()}
-                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-5xl font-serif font-bold text-white tracking-tighter">
+                      <span className="text-xl text-stone-600 mr-2 font-sans font-medium">GHc</span>
+                      {((calculateTotal() * (1 - discount / 100)) * (1 + (applyTax ? Number(settings.tax_rate || 15) / 100 : 0))).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-white/5">
                   <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10">
                     <div className="space-y-1">
                       <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest block">Total Paid History</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xl font-bold text-white">GHc {amountPaid.toLocaleString()}</span>
-                        <span className="text-[10px] text-stone-600 font-bold uppercase">{paymentHistory.length} Payments</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl font-bold text-white font-mono whitespace-nowrap">GHc {amountPaid.toLocaleString()}</span>
+                        <span className="text-[10px] text-stone-600 font-bold uppercase whitespace-nowrap">{paymentHistory.length} Payments</span>
                       </div>
                     </div>
                     <button 
@@ -1198,8 +1199,7 @@ export default function QuoteEngine() {
                         const amount = prompt('Enter payment amount:');
                         if (amount && !isNaN(Number(amount))) {
                           const val = Number(amount);
-                          const method = prompt('Payment Method (e.g. Cash, Mobile Money, Bank Transfer):') || 'Payment';
-                          const newRecord = { amount: val, date: new Date().toISOString(), method };
+                          const newRecord = { amount: val, date: new Date().toISOString() };
                           setPaymentHistory([...paymentHistory, newRecord]);
                           setAmountPaid(prev => prev + val);
                         }
@@ -1212,12 +1212,11 @@ export default function QuoteEngine() {
                   </div>
                   
                   {paymentHistory.length > 0 && (
-                    <div className="max-h-32 overflow-y-auto space-y-2 pr-2 scrollbar-hide py-2">
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-2 scrollbar-hide py-2">
                       {paymentHistory.map((p, i) => (
-                        <div key={i} className="flex justify-between items-center text-[10px] text-stone-500 font-medium group/payment">
-                          <div className="flex-1">
-                            <span className="block font-bold text-white">{new Date(p.date).toLocaleDateString()} - {p.method}</span>
-                            <span>GHc {p.amount.toLocaleString()}</span>
+                        <div key={i} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/10 group/payment hover:bg-white/10 transition-all">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-xs font-black text-white font-mono">GHc {p.amount.toLocaleString()}</span>
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover/payment:opacity-100 transition-opacity">
                             <button 
@@ -1225,16 +1224,16 @@ export default function QuoteEngine() {
                                 const newAmount = prompt('Edit payment amount:', p.amount.toString());
                                 if (newAmount && !isNaN(Number(newAmount))) {
                                   const val = Number(newAmount);
-                                  const method = prompt('Edit Payment Method:', p.method) || p.method;
                                   const updatedHistory = [...paymentHistory];
-                                  updatedHistory[i] = { ...p, amount: val, method };
+                                  updatedHistory[i] = { ...p, amount: val };
                                   setPaymentHistory(updatedHistory);
                                   setAmountPaid(updatedHistory.reduce((sum, current) => sum + current.amount, 0));
                                 }
                               }}
-                              className="p-1 hover:bg-white/10 rounded-md text-stone-400 hover:text-white transition-colors"
+                              className="p-1.5 hover:bg-white/10 rounded-lg text-stone-400 hover:text-white transition-colors"
+                              title="Edit Amount"
                             >
-                              <FileText className="w-3 h-3" />
+                              <FileText className="w-3.5 h-3.5" />
                             </button>
                             <button 
                               onClick={() => {
@@ -1244,9 +1243,10 @@ export default function QuoteEngine() {
                                   setAmountPaid(updatedHistory.reduce((sum, current) => sum + current.amount, 0));
                                 }
                               }}
-                              className="p-1 hover:bg-red-500/10 rounded-md text-stone-400 hover:text-red-400 transition-colors"
+                              className="p-1.5 hover:bg-red-500/10 rounded-lg text-stone-400 hover:text-red-400 transition-colors"
+                              title="Delete Payment"
                             >
-                              <X className="w-3 h-3" />
+                              <X className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
@@ -1448,7 +1448,7 @@ export default function QuoteEngine() {
                               <div className="space-y-1 pl-4 border-l-2 border-stone-100 italic">
                                 {paymentHistory.map((p, i) => (
                                   <div key={i} className="flex justify-between text-[10px] text-stone-400">
-                                    <span>{new Date(p.date).toLocaleDateString()} - {p.method}</span>
+                                    <span>Payment {i + 1}</span>
                                     <span>GHc {p.amount.toLocaleString()}</span>
                                   </div>
                                 ))}
