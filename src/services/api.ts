@@ -10,10 +10,10 @@ import {
   orderBy, 
   limit,
   where,
-  setDoc,
-  getDocFromServer
+  setDoc
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage } from '../firebase';
 
 enum OperationType {
   CREATE = 'create',
@@ -78,20 +78,60 @@ export const getLeads = async () => {
   }
 };
 
-export const createLead = async (lead: any) => {
+/**
+ * Saves the Public Intake Form data into a leads collection.
+ */
+export const addLead = async (data: any) => {
   const path = 'leads';
   try {
     const newLead = { 
-      ...lead, 
+      ...data, 
       status: 'new',
       createdAt: new Date().toISOString() 
     };
     const docRef = await addDoc(collection(db, path), newLead);
     await logActivity('lead', 'Created Lead', `New lead from ${newLead.clientName}`);
+
+    // Trigger email notification if enabled in settings
+    try {
+      const settingsSnapshot = await getDocs(collection(db, 'settings'));
+      const settingsMap = settingsSnapshot.docs.reduce((acc: Record<string, string>, doc) => {
+        const d = doc.data();
+        acc[d.key] = d.value;
+        return acc;
+      }, {});
+
+      if (settingsMap.notify_new_lead === 'true') {
+        const targetEmail = settingsMap.notification_email || settingsMap.business_email;
+        await fetch('/api/notify-lead', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lead: newLead,
+            targetEmail,
+            businessName: settingsMap.business_name || 'Event CRM'
+          })
+        });
+      }
+    } catch (e) {
+      console.error('Failed to trigger email notification:', e);
+    }
+
     return { id: docRef.id, ...newLead };
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
   }
+};
+
+/**
+ * Legacy alias for addLead
+ */
+export const createLead = async (lead: any, inspirationFile?: File) => {
+  let inspirationLink = lead.inspirationLink || '';
+  if (inspirationFile) {
+    inspirationLink = await uploadInspiration(inspirationFile);
+  }
+  return addLead({ ...lead, inspirationLink });
 };
 
 export const updateLead = async (id: string, lead: any) => {
@@ -265,6 +305,13 @@ export const deleteQuote = async (id: string) => {
   }
 };
 
+/**
+ * Updates a Quote status (e.g., from 'draft' to 'quote' to 'invoice' to 'paid').
+ */
+export const updateQuoteStatus = async (id: string, status: string) => {
+  return updateQuote(id, { status });
+};
+
 // Dashboard Stats
 export const getDashboardStats = async () => {
   try {
@@ -332,48 +379,6 @@ export const getUsers = async () => {
   }
 };
 
-export const getInvites = async () => {
-  const path = 'invites';
-  try {
-    const snapshot = await getDocs(collection(db, path));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
-  }
-};
-
-export const addInvite = async (invite: { email: string; role: string }) => {
-  const path = 'invites';
-  const normalizedEmail = invite.email.toLowerCase().trim();
-  try {
-    const newInvite = { 
-      ...invite, 
-      email: normalizedEmail, // Save normalized email
-      createdAt: new Date().toISOString(),
-      invitedBy: auth.currentUser?.email 
-    };
-    // Use email as ID to prevent duplicates if someone is double-invited
-    const inviteRef = doc(db, 'invites', normalizedEmail);
-    await setDoc(inviteRef, newInvite);
-    await logActivity('user', 'Invited User', `Email: ${normalizedEmail}, Role: ${invite.role}`);
-    return { id: normalizedEmail, ...newInvite };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
-  }
-};
-
-export const deleteInvite = async (email: string) => {
-  const normalizedEmail = email.toLowerCase().trim();
-  const path = `invites/${normalizedEmail}`;
-  try {
-    await deleteDoc(doc(db, 'invites', normalizedEmail));
-    await logActivity('user', 'Removed Invite', `Email: ${normalizedEmail}`);
-    return { success: true };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
-};
-
 export const getUserProfile = async (userId: string) => {
   const path = `users/${userId}`;
   try {
@@ -422,13 +427,9 @@ export const updateUserProfile = async (userId: string, data: { displayName?: st
 export const syncUser = async (user: any) => {
   if (!user) return null;
   const path = `users/${user.uid}`;
-  const normalizedEmail = user.email ? user.email.toLowerCase().trim() : '';
-  
-  console.log('[Auth] Syncing user:', normalizedEmail);
-
   try {
     const userRef = doc(db, 'users', user.uid);
-    const userSnap = await getDocFromServer(userRef);
+    const userSnap = await getDoc(userRef);
     
     const userData = {
       email: user.email,
@@ -437,73 +438,38 @@ export const syncUser = async (user: any) => {
       lastLogin: new Date().toISOString()
     };
 
-    let role = 'viewer';
-    let needsUpdate = false;
-
     if (!userSnap.exists()) {
-      console.log('[Auth] New user detected');
-      // NEW USER flow
-      if (user.email === 'benjamintetteh@gmail.com') {
-        role = 'admin';
-        console.log('[Auth] Assigning bootstrap admin role');
-      } else {
-        // Check for an invite
-        console.log('[Auth] Checking for invite:', normalizedEmail);
-        const inviteRef = doc(db, 'invites', normalizedEmail);
-        const inviteSnap = await getDocFromServer(inviteRef);
-        
-        if (inviteSnap.exists()) {
-          role = inviteSnap.data().role;
-          console.log('[Auth] Invite found! Assigned role:', role);
-          deleteDoc(inviteRef).catch(e => console.error('Failed to delete used invite:', e));
-        } else {
-          console.log('[Auth] No invite found for email');
-        }
-      }
-
+      // Check if this is the bootstrap admin
+      const role = user.email === 'benjamintetteh@gmail.com' ? 'admin' : 'viewer';
       const newUser = { ...userData, role, createdAt: new Date().toISOString() };
       await setDoc(userRef, newUser);
-      logActivity('user', 'New User Registered', `Email: ${user.email} as ${role}`).catch(() => {});
+      await logActivity('user', 'New User Registered', `Email: ${user.email}`);
       return newUser;
     } else {
-      console.log('[Auth] Existing user detected');
-      // EXISTING USER flow
-      const currentData = userSnap.data();
-      role = currentData.role || 'viewer';
-      console.log('[Auth] Current role:', role);
-
-      // UPGRADE viewer if they have a pending invite
-      if (role === 'viewer' && user.email !== 'benjamintetteh@gmail.com') {
-        console.log('[Auth] Checking for upgrade invite:', normalizedEmail);
-        const inviteRef = doc(db, 'invites', normalizedEmail);
-        const inviteSnap = await getDocFromServer(inviteRef);
-
-        if (inviteSnap.exists()) {
-          role = inviteSnap.data().role;
-          needsUpdate = true;
-          console.log('[Auth] Upgrade invite found! New role:', role);
-          deleteDoc(inviteRef).catch(e => console.error('Failed to delete used invite:', e));
-        } else {
-          console.log('[Auth] No upgrade invite found');
-        }
-      }
-
-      if (needsUpdate || currentData.lastLogin !== userData.lastLogin) {
-        console.log('[Auth] Updating profile data');
-        updateDoc(userRef, { ...userData, role }).catch(e => console.error('Update profile error:', e));
-      }
-      
-      const combined = { ...currentData, ...userData, role };
-      console.log('[Auth] Final user state:', combined);
-      return combined;
+      await updateDoc(userRef, userData);
+      return { ...userSnap.data(), ...userData };
     }
   } catch (error) {
-    console.error('[Auth] syncUser critical error:', error);
-    return { email: user.email, role: 'viewer' };
+    handleFirestoreError(error, OperationType.WRITE, path);
   }
 };
 
 // Activity Logs
+/**
+ * Uploads a file to a folder named client-briefs/ and returns a download URL.
+ */
+export const uploadInspiration = async (file: File) => {
+  const path = `client-briefs/${Date.now()}_${file.name}`;
+  try {
+    const storageRef = ref(storage, path);
+    const uploadResult = await uploadBytes(storageRef, file);
+    return await getDownloadURL(uploadResult.ref);
+  } catch (error) {
+    console.error('Error uploading inspiration:', error);
+    throw error;
+  }
+};
+
 export const logActivity = async (category: string, action: string, details?: string) => {
   const path = 'activity_logs';
   try {

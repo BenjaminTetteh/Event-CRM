@@ -7,7 +7,7 @@ import {
   Building2, CreditCard, Bell, Shield, 
   Save, Globe, Mail, Phone, MapPin, 
   Percent, FileText, Camera, Loader2, CheckCircle2,
-  Users, History, AlertCircle, User, UserPlus, X, Send, Clock, Copy, ExternalLink
+  Users, History, AlertCircle, User
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import * as api from '@/src/services/api';
@@ -86,25 +86,12 @@ export default function Settings() {
   ];
 
   const [users, setUsers] = React.useState<any[]>([]);
-  const [invites, setInvites] = React.useState<any[]>([]);
   const [userLoading, setUserLoading] = React.useState(false);
-  const [showInviteForm, setShowInviteForm] = React.useState(false);
-  const [inviteData, setInviteData] = React.useState({ email: '', role: 'viewer' });
-  const [lastInvitedEmail, setLastInvitedEmail] = React.useState<string | null>(null);
-
-  const handleCopyInviteLink = (email?: string) => {
-    const appUrl = window.location.origin;
-    const message = `You've been invited to join the team at Event CRM! You can sign in here: ${appUrl}`;
-    navigator.clipboard.writeText(message);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
-  };
 
   React.useEffect(() => {
     fetchSettings();
     if (activeSection === 'team') {
       fetchUsers();
-      fetchInvites();
     }
     // Clear saved tab after use
     localStorage.removeItem('settings_tab');
@@ -119,44 +106,6 @@ export default function Settings() {
       console.error('Error fetching users:', error);
     } finally {
       setUserLoading(false);
-    }
-  };
-
-  const fetchInvites = async () => {
-    try {
-      const data = await api.getInvites();
-      setInvites(data || []);
-    } catch (error) {
-      console.error('Error fetching invites:', error);
-    }
-  };
-
-  const handleSendInvite = async () => {
-    if (!inviteData.email || !inviteData.email.includes('@')) {
-      alert('Please enter a valid email address.');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const newInvite = await api.addInvite(inviteData);
-      setInvites(prev => [newInvite, ...prev]);
-      setLastInvitedEmail(inviteData.email);
-      setInviteData({ email: '', role: 'viewer' });
-      // Don't close immediately if we want to show the "Success" state
-      setTimeout(() => setLastInvitedEmail(null), 10000);
-    } catch (error) {
-      console.error('Error sending invite:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteInvite = async (email: string) => {
-    try {
-      await api.deleteInvite(email);
-      setInvites(prev => prev.filter(i => i.email !== email));
-    } catch (error) {
-      console.error('Error deleting invite:', error);
     }
   };
 
@@ -552,239 +501,81 @@ export default function Settings() {
               )}
 
               {activeSection === 'team' && (
-                <div className="space-y-10">
-                  <div className="flex justify-between items-center">
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center mb-6">
                     <div>
-                      <h3 className="text-xl font-serif font-bold text-stone-900">Team Members</h3>
+                      <h3 className="text-lg font-serif font-bold text-stone-900">Team Members</h3>
                       <p className="text-sm text-stone-500">Manage your team and their access levels.</p>
                     </div>
-                    <button 
-                      type="button"
-                      onClick={() => setShowInviteForm(!showInviteForm)}
-                      className={cn(
-                        "flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-bold transition-all",
-                        showInviteForm ? "bg-stone-100 text-stone-600" : "bg-stone-900 text-white hover:bg-stone-800"
-                      )}
-                    >
-                      {showInviteForm ? <X className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                      {showInviteForm ? 'Cancel' : 'Add Member'}
-                    </button>
                   </div>
-
-                  {showInviteForm && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-8 bg-stone-50 rounded-4xl border border-stone-100 shadow-sm space-y-6"
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                        <div className="md:col-span-1 space-y-2">
-                          <label className="text-xs font-bold text-stone-900 uppercase tracking-widest px-1">Email Address</label>
-                          <input 
-                            type="email"
-                            value={inviteData.email}
-                            onChange={(e) => setInviteData({ ...inviteData, email: e.target.value })}
-                            placeholder="teammate@example.com"
-                            className="w-full px-5 py-3.5 rounded-2xl border border-stone-200 focus:ring-2 focus:ring-stone-900 focus:border-transparent transition-all outline-none text-sm font-medium"
-                          />
-                        </div>
-                        <div className="md:col-span-1 space-y-2">
-                          <label className="text-xs font-bold text-stone-900 uppercase tracking-widest px-1">Initial Role</label>
-                          <select 
-                            value={inviteData.role}
-                            onChange={(e) => setInviteData({ ...inviteData, role: e.target.value })}
-                            className="w-full px-5 py-3.5 rounded-2xl border border-stone-200 focus:ring-2 focus:ring-stone-900 focus:border-transparent transition-all outline-none text-sm font-medium bg-white"
-                          >
-                            <option value="viewer">Viewer (Read Only)</option>
-                            <option value="editor">Editor (Can Manage Leads)</option>
-                            <option value="admin">Admin (Full Access)</option>
-                          </select>
-                        </div>
-                        <div className="md:col-span-1">
-                          <button 
-                            type="button"
-                            onClick={handleSendInvite}
-                            disabled={isSaving}
-                            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-stone-900 text-white rounded-2xl font-bold hover:bg-stone-800 transition-all disabled:opacity-50 active:scale-95 shadow-lg shadow-stone-200"
-                          >
-                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                            Grant Access
-                          </button>
-                        </div>
-                      </div>
-
-                      {lastInvitedEmail && (
-                        <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between gap-4"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                              <CheckCircle2 className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-emerald-900">Access Granted to {lastInvitedEmail}</p>
-                              <p className="text-xs text-emerald-600">They can now sign in using Google to join your team.</p>
-                            </div>
-                          </div>
-                          <button 
-                            type="button"
-                            onClick={() => handleCopyInviteLink()}
-                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all active:scale-95 whitespace-nowrap"
-                          >
-                            <Copy className="w-3 h-3" />
-                            Copy Invite Link
-                          </button>
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  )}
 
                   {userLoading ? (
                     <div className="flex justify-center py-12">
                       <Loader2 className="w-8 h-8 text-stone-300 animate-spin" />
                     </div>
                   ) : (
-                    <div className="space-y-6">
-                      <div className="overflow-x-auto scrollbar-hide">
-                        <table className="w-full text-left min-w-[600px]">
-                          <thead>
-                            <tr className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.2em] border-b border-stone-100">
-                              <th className="pb-4 pr-4">Team Member</th>
-                              <th className="pb-4 px-4 text-center">Permissions</th>
-                              <th className="pb-4 px-4">Last Activity</th>
-                              <th className="pb-4 pl-4 text-right">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-stone-50">
-                            {users.map((user) => (
-                              <tr key={user.id} className="group hover:bg-stone-50/50 transition-colors">
-                                <td className="py-6 pr-4">
-                                  <div className="flex items-center gap-4">
-                                    <div className="relative">
-                                      <img 
-                                        src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}&background=f5f5f4&color=78716c&bold=true`} 
-                                        alt="" 
-                                        className="w-10 h-10 rounded-2xl bg-stone-100 border border-stone-100 object-cover"
-                                        referrerPolicy="no-referrer"
-                                      />
-                                      <div className={cn(
-                                        "absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white",
-                                        user.lastLogin ? "bg-emerald-500" : "bg-stone-300"
-                                      )} />
-                                    </div>
-                                    <div>
-                                      <p className="text-sm font-bold text-stone-900">{user.displayName || 'Unnamed User'}</p>
-                                      <p className="text-[10px] font-medium text-stone-400 mt-0.5 tracking-tight">{user.email}</p>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="py-6 px-4">
-                                  <div className="flex justify-center">
-                                    <select 
-                                      value={user.role}
-                                      onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                                      className={cn(
-                                        "text-[10px] font-bold uppercase tracking-widest rounded-lg px-3 py-1.5 border-none focus:ring-0 cursor-pointer transition-colors",
-                                        user.role === 'admin' ? "bg-purple-50 text-purple-600" :
-                                        user.role === 'editor' ? "bg-amber-50 text-amber-600" :
-                                        "bg-stone-100 text-stone-500"
-                                      )}
-                                      disabled={user.email === 'benjamintetteh@gmail.com'}
-                                    >
-                                      <option value="admin">Admin</option>
-                                      <option value="editor">Editor</option>
-                                      <option value="viewer">Viewer</option>
-                                    </select>
-                                  </div>
-                                </td>
-                                <td className="py-6 px-4">
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3.5 h-3.5 text-stone-200" />
-                                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-tighter">
-                                      {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never'}
-                                    </p>
-                                  </div>
-                                </td>
-                                <td className="py-6 pl-4 text-right">
-                                  <button 
-                                    type="button"
-                                    onClick={() => handleDeleteUser(user.id)}
-                                    className="p-2 text-stone-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-0"
-                                    disabled={user.email === 'benjamintetteh@gmail.com'}
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {invites.length > 0 && (
-                        <div className="mt-12 pt-12 border-t border-stone-100">
-                          <h4 className="text-xs font-bold text-stone-900 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                            <Send className="w-3.5 h-3.5 text-stone-400" />
-                            Pending Invitations ({invites.length})
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {invites.map((invite) => (
-                              <div key={invite.email} className="flex items-center justify-between p-5 bg-stone-50 rounded-3xl border border-stone-100 group">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center border border-stone-100 shadow-sm">
-                                    <Mail className="w-5 h-5 text-stone-300" />
-                                  </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-xs font-bold text-stone-400 uppercase tracking-widest border-b border-stone-100">
+                            <th className="pb-4 pr-4">User</th>
+                            <th className="pb-4 px-4">Role</th>
+                            <th className="pb-4 px-4">Last Login</th>
+                            <th className="pb-4 pl-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-50">
+                          {users.map((user) => (
+                            <tr key={user.id} className="text-sm">
+                              <td className="py-4 pr-4">
+                                <div className="flex items-center gap-3">
+                                  <img 
+                                    src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
+                                    alt="" 
+                                    className="w-8 h-8 rounded-full bg-stone-100"
+                                    referrerPolicy="no-referrer"
+                                  />
                                   <div>
-                                    <p className="text-sm font-bold text-stone-900">{invite.email}</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 bg-stone-200 text-stone-500 rounded-md">
-                                        {invite.role}
-                                      </span>
-                                      <span className="text-[9px] font-medium text-stone-300">Invited on {new Date(invite.createdAt).toLocaleDateString()}</span>
-                                    </div>
+                                    <p className="font-bold text-stone-900">{user.displayName}</p>
+                                    <p className="text-xs text-stone-500">{user.email}</p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <button 
-                                    type="button"
-                                    onClick={() => handleCopyInviteLink(invite.email)}
-                                    className="p-2 text-stone-300 hover:text-stone-900 transition-colors"
-                                    title="Copy Invite Link"
-                                  >
-                                    <Copy className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    type="button"
-                                    onClick={() => handleDeleteInvite(invite.email)}
-                                    className="p-2 text-stone-300 hover:text-red-500 transition-colors"
-                                    title="Cancel Invitation"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                              </td>
+                              <td className="py-4 px-4">
+                                <select 
+                                  value={user.role}
+                                  onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                                  className="text-xs font-bold bg-stone-50 border-none rounded-lg px-2 py-1 focus:ring-0 cursor-pointer"
+                                  disabled={user.email === 'benjamintetteh@gmail.com'}
+                                >
+                                  <option value="admin">Admin</option>
+                                  <option value="editor">Editor</option>
+                                  <option value="viewer">Viewer</option>
+                                </select>
+                              </td>
+                              <td className="py-4 px-4 text-stone-500 text-xs">
+                                {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                              </td>
+                              <td className="py-4 pl-4 text-right">
+                                <button 
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  className="text-red-500 hover:text-red-700 font-bold text-xs disabled:opacity-30"
+                                  disabled={user.email === 'benjamintetteh@gmail.com'}
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                   
-                  <div className="p-8 bg-stone-900 rounded-4xl relative overflow-hidden group">
-                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                      <div className="space-y-2">
-                        <h4 className="text-white font-serif font-bold text-lg">Just-in-Time Access</h4>
-                        <p className="text-stone-400 text-sm max-w-md leading-relaxed">
-                          New users can sign in immediately. They will be assigned the <span className="text-white font-bold underline decoration-stone-500 decoration-2 underline-offset-4">Viewer</span> role unless you've pre-authorized them here.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 text-stone-400">
-                        <Shield className="w-12 h-12 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500" />
-                      </div>
-                    </div>
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+                  <div className="p-6 bg-stone-50 rounded-2xl border border-stone-100">
+                    <p className="text-xs text-stone-500 leading-relaxed">
+                      <span className="font-bold text-stone-900">Note:</span> New users are automatically added to this list when they sign in for the first time. By default, they are assigned the <span className="font-bold">Viewer</span> role. You can upgrade their role here.
+                    </p>
                   </div>
                 </div>
               )}
@@ -794,33 +585,72 @@ export default function Settings() {
               )}
 
               {activeSection === 'notifications' && (
-                <div className="space-y-4">
-                  {[
-                    { key: 'notify_new_lead', label: 'New Lead Inquiries', desc: 'Receive an email when a client completes the intake form.' },
-                    { key: 'notify_quote_viewed', label: 'Quote Viewed', desc: 'Get notified when a client opens a quote link.' },
-                    { key: 'notify_payment_received', label: 'Payment Received', desc: 'Receive alerts for successful invoice payments.' },
-                    { key: 'notify_low_stock', label: 'Low Stock Alerts', desc: 'Get notified when inventory items fall below threshold.' },
-                  ].map((item) => (
-                    <div key={item.key} className="flex items-center justify-between p-4 bg-stone-50 rounded-2xl border border-stone-100">
-                      <div>
-                        <p className="text-sm font-bold text-stone-900">{item.label}</p>
-                        <p className="text-xs text-stone-500">{item.desc}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateSetting(item.key, settings[item.key] === 'true' ? 'false' : 'true')}
-                        className={cn(
-                          "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                          settings[item.key] === 'true' ? "bg-stone-900" : "bg-stone-200"
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    {[
+                      { key: 'notify_new_lead', label: 'New Lead Inquiries', desc: 'Receive an email when a client completes the intake form.' },
+                      { key: 'notify_quote_viewed', label: 'Quote Viewed', desc: 'Get notified when a client opens a quote link.' },
+                      { key: 'notify_payment_received', label: 'Payment Received', desc: 'Receive alerts for successful invoice payments.' },
+                      { key: 'notify_low_stock', label: 'Low Stock Alerts', desc: 'Get notified when inventory items fall below threshold.' },
+                    ].map((item) => (
+                      <div key={item.key} className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-bold text-stone-900">{item.label}</p>
+                            <p className="text-xs text-stone-500">{item.desc}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateSetting(item.key, settings[item.key] === 'true' ? 'false' : 'true')}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0",
+                              settings[item.key] === 'true' ? "bg-stone-900" : "bg-stone-200"
+                            )}
+                          >
+                            <div className={cn(
+                              "h-4 w-4 rounded-full bg-white transition-transform",
+                              settings[item.key] === 'true' ? "translate-x-6" : "translate-x-1"
+                            )} />
+                          </button>
+                        </div>
+
+                        {item.key === 'notify_new_lead' && settings['notify_new_lead'] === 'true' && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="pt-4 border-t border-stone-200/60 space-y-2"
+                          >
+                            <label className="block text-xs font-bold text-stone-700">Notification Email Address</label>
+                            <input 
+                              type="email"
+                              value={settings.notification_email || ''}
+                              onChange={(e) => handleUpdateSetting('notification_email', e.target.value)}
+                              placeholder={settings.business_email || "ama@example.com"}
+                              className="w-full max-w-md px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-sm font-medium focus:ring-2 focus:ring-stone-900 transition-all"
+                            />
+                            <p className="text-[10px] text-stone-400 font-medium">Leave empty to default to your business email ({settings.business_email || 'Not set'}).</p>
+                          </motion.div>
                         )}
-                      >
-                        <div className={cn(
-                          "h-4 w-4 rounded-full bg-white transition-transform",
-                          settings[item.key] === 'true' ? "translate-x-6" : "translate-x-1"
-                        )} />
-                      </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="p-6 bg-stone-50 rounded-2xl border border-stone-100 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-5 h-5 text-stone-600" />
+                      <h4 className="text-sm font-bold text-stone-900">Email Delivery & SMTP Integration</h4>
                     </div>
-                  ))}
+                    <p className="text-xs text-stone-500 leading-relaxed">
+                      By default, email alerts operate in <strong>Sandbox Mode</strong> and log leads safely to your application logs. To route them to your chosen email address, ask your hosting administrator to set up the following SMTP credentials in your environment configurations:
+                    </p>
+                    <div className="bg-stone-900 text-stone-300 p-4 rounded-xl font-mono text-[10px] space-y-1">
+                      <div>SMTP_HOST=<span className="text-stone-500">e.g. smtp.gmail.com</span></div>
+                      <div>SMTP_PORT=<span className="text-stone-500">e.g. 465 or 587</span></div>
+                      <div>SMTP_USER=<span className="text-stone-500">e.g. sender@gmail.com</span></div>
+                      <div>SMTP_PASS=<span className="text-stone-500">e.g. app-specific-password</span></div>
+                      <div>SMTP_FROM=<span className="text-stone-500">e.g. "Your Company" &lt;sender@gmail.com&gt;</span></div>
+                    </div>
+                  </div>
                 </div>
               )}
 
