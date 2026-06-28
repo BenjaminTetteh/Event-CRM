@@ -78,10 +78,22 @@ async function startServer() {
               <td style="padding: 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #78716c;">Decision Maker</td>
               <td style="padding: 8px 0; font-size: 14px; font-weight: 600; color: #1c1917;">${lead.isDecisionMaker ? "Yes" : "No"}</td>
             </tr>
+            ${lead.referralSource ? `
+            <tr>
+              <td style="padding: 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #78716c;">How They Found Us</td>
+              <td style="padding: 8px 0; font-size: 14px; font-weight: 600; color: #1c1917;">${lead.referralSource}</td>
+            </tr>
+            ` : ""}
             ${lead.inspirationLink ? `
             <tr>
               <td style="padding: 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #78716c;">Inspiration Link</td>
               <td style="padding: 8px 0; font-size: 14px; font-weight: 600; color: #1c1917;"><a href="${lead.inspirationLink}" target="_blank" style="color: #1c1917; text-decoration: underline;">View Inspiration</a></td>
+            </tr>
+            ` : ""}
+            ${lead.inspirationImage ? `
+            <tr>
+              <td style="padding: 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #78716c;">Inspiration Image</td>
+              <td style="padding: 8px 0; font-size: 14px; font-weight: 600; color: #1c1917;"><a href="${lead.inspirationImage}" target="_blank" style="color: #1c1917; text-decoration: underline;">View Attached Image</a></td>
             </tr>
             ` : ""}
           </table>

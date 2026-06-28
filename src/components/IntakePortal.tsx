@@ -80,7 +80,8 @@ export default function IntakePortal() {
         isDecisionMaker: data.isDecisionMaker === 'Yes',
         inspirationLink: data.inspirationLink,
         eventVibe: [data.eventVibe], // Keep as array for compatibility
-        servicesInterested: data.serviceInterest
+        servicesInterested: data.serviceInterest,
+        referralSource: data.referralSource
       }, selectedFile || undefined);
       setIsSubmitted(true);
     } catch (error) {
@@ -142,12 +143,12 @@ export default function IntakePortal() {
                   <Sparkles className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-4xl font-serif font-bold text-stone-900 tracking-tight">Client Brief</h2>
+                  <h2 className="text-4xl font-serif font-bold text-stone-900 tracking-tight">Client brief</h2>
                   <p className="text-[10px] font-black text-stone-300 uppercase tracking-[0.3em] mt-1">Qualification Form</p>
                 </div>
               </div>
               <p className="text-stone-600 text-base font-medium max-w-xl leading-relaxed">
-                Welcome to Maapz Events. Help us understand your vision. Please complete the qualification brief below to start your design journey with us.
+                Help us understand your vision. Please complete the qualification brief below to start your design journey.
               </p>
             </div>
 
@@ -417,7 +418,7 @@ export default function IntakePortal() {
                       />
                     </div>
                     <span className="text-xs text-stone-500 font-medium leading-relaxed group-hover:text-stone-900 transition-colors">
-                      I consent to the processing of my personal data for the purpose of receiving a quote and event planning services from Maapz Events. We respect your privacy and will never share your data with third parties.
+                      I consent to the processing of my personal data for the purpose of receiving a quote and event planning services. We respect your privacy and will never share your data with third parties.
                     </span>
                   </label>
                   {errors.consent && <p className="text-xs text-red-500 font-bold">{errors.consent.message}</p>}

@@ -4,7 +4,9 @@ import {
   Search, Filter, MoreHorizontal, 
   Mail, Phone, Calendar, Users, 
   DollarSign, ArrowRight, CheckCircle2,
-  Clock, AlertCircle, Loader2, Trash2, Archive
+  Clock, AlertCircle, Loader2, Trash2, Archive,
+  ChevronDown, ChevronUp, ExternalLink, Image as ImageIcon,
+  Check, HelpCircle, FileText
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
@@ -16,6 +18,12 @@ export default function LeadsList() {
   const [loading, setLoading] = React.useState(true);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filterStatus, setFilterStatus] = React.useState('All');
+  const [expandedLeads, setExpandedLeads] = React.useState<Record<string, boolean>>({});
+  const [lightboxUrl, setLightboxUrl] = React.useState<string | null>(null);
+
+  const toggleExpand = (id: string) => {
+    setExpandedLeads(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   React.useEffect(() => {
     fetchLeads();
@@ -226,10 +234,200 @@ export default function LeadsList() {
                   </div>
                 </div>
               </div>
+
+              {/* Sub-row trigger for full brief expansion */}
+              <div 
+                onClick={() => toggleExpand(lead.id)}
+                className="border-t border-stone-100 bg-stone-50/40 hover:bg-stone-50 py-4 px-8 sm:px-10 flex justify-between items-center cursor-pointer transition-colors group/expand"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-stone-400 group-hover/expand:text-stone-900 transition-colors" />
+                  <span className="text-xs font-bold text-stone-500 group-hover/expand:text-stone-900 transition-colors">
+                    {expandedLeads[lead.id] ? 'Hide Qualification Brief Details' : 'View Full Client Qualification Brief'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3 text-[10px] text-stone-400 font-medium mr-2">
+                    {lead.servicesInterested && lead.servicesInterested.length > 0 && (
+                      <span className="hidden sm:inline bg-stone-100/80 px-2 py-0.5 rounded-md font-bold uppercase tracking-wide">
+                        {lead.servicesInterested.length} {lead.servicesInterested.length === 1 ? 'Service' : 'Services'}
+                      </span>
+                    )}
+                    {(lead.inspirationImage || (lead.inspirationLink && lead.inspirationLink.includes('firebasestorage'))) && (
+                      <span className="hidden sm:inline-flex items-center gap-1 bg-stone-100/80 px-2 py-0.5 rounded-md font-bold uppercase tracking-wide text-amber-600">
+                        <ImageIcon className="w-2.5 h-2.5" /> Image Attached
+                      </span>
+                    )}
+                  </div>
+                  {expandedLeads[lead.id] ? (
+                    <ChevronUp className="w-4 h-4 text-stone-400 group-hover/expand:text-stone-900 transition-transform" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-stone-400 group-hover/expand:text-stone-900 transition-transform" />
+                  )}
+                </div>
+              </div>
+
+              {/* Expanded panel with smooth animation */}
+              {expandedLeads[lead.id] && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="border-t border-stone-100 bg-stone-50/20 px-8 sm:px-10 py-8 space-y-8"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* Column 1: Core Design Preferences */}
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Creative Vibe & Services</h4>
+                      <div className="space-y-3">
+                        <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
+                          <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Design Vibe</span>
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 bg-amber-500 rounded-full" />
+                            <span className="text-sm font-bold text-stone-900">{lead.eventVibe ? (Array.isArray(lead.eventVibe) ? lead.eventVibe.join(', ') : lead.eventVibe) : 'No Vibe Specified'}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
+                          <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Services Needed</span>
+                          {lead.servicesInterested && lead.servicesInterested.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {lead.servicesInterested.map((srv: string) => (
+                                <div key={srv} className="flex items-center gap-2 text-xs font-semibold text-stone-700">
+                                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                  <span>{srv}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-stone-400 italic">None selected</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Column 2: Additional Logistics */}
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Qualification Details</h4>
+                      <div className="space-y-3">
+                        <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
+                          <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Primary Decision Maker</span>
+                          <div className="flex items-center gap-2 text-sm font-bold text-stone-900">
+                            {lead.isDecisionMaker === true || lead.isDecisionMaker === 'Yes' ? (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                <span>Yes, Primary decision maker</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="w-4 h-4 text-amber-500" />
+                                <span>No, secondary contact</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
+                          <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">How They Found Us</span>
+                          <div className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                            <span className="bg-stone-100 text-stone-600 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md">
+                              {lead.referralSource || 'Not specified'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Column 3: Inspiration & Attachments */}
+                    <div className="space-y-4 md:col-span-1">
+                      <h4 className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Inspiration & Board</h4>
+                      <div className="space-y-3">
+                        {(() => {
+                          const hasImageUrl = lead.inspirationImage || (lead.inspirationLink && lead.inspirationLink.includes('firebasestorage'));
+                          const isWebLink = lead.inspirationLink && !lead.inspirationLink.includes('firebasestorage');
+                          
+                          return (
+                            <>
+                              {isWebLink ? (
+                                <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
+                                  <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Inspiration Website</span>
+                                  <a 
+                                    href={lead.inspirationLink} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 text-xs font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100/80 px-3 py-1.5 rounded-xl transition-all w-full justify-between"
+                                  >
+                                    <span className="truncate">{lead.inspirationLink}</span>
+                                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                                  </a>
+                                </div>
+                              ) : (
+                                <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
+                                  <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Inspiration Website</span>
+                                  <span className="text-xs text-stone-400 italic">No website link shared</span>
+                                </div>
+                              )}
+
+                              {hasImageUrl ? (
+                                <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
+                                  <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Inspiration Image</span>
+                                  <div 
+                                    onClick={() => setLightboxUrl(lead.inspirationImage || lead.inspirationLink)}
+                                    className="relative rounded-xl overflow-hidden cursor-zoom-in group/img border border-stone-100 max-h-32"
+                                  >
+                                    <img 
+                                      src={lead.inspirationImage || lead.inspirationLink} 
+                                      alt="Client Inspiration"
+                                      className="w-full h-24 object-cover group-hover/img:scale-105 transition-transform duration-500"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                      <span className="text-white text-[10px] font-bold uppercase tracking-widest bg-stone-900/80 px-2.5 py-1.5 rounded-lg flex items-center gap-1">
+                                        <ImageIcon className="w-3 h-3" /> Zoom
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
+                                  <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Inspiration Image</span>
+                                  <span className="text-xs text-stone-400 italic">No image file uploaded</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           ))
         )}
       </div>
+
+      {/* Lightbox Modal */}
+      {lightboxUrl && (
+        <div 
+          onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 bg-stone-950/90 z-[9999] flex items-center justify-center p-4 cursor-zoom-out animate-fade-in"
+        >
+          <div className="relative max-w-4xl w-full max-h-[85vh] flex items-center justify-center">
+            <img 
+              src={lightboxUrl} 
+              alt="Client Inspiration Fullscreen" 
+              className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl border border-white/10"
+              referrerPolicy="no-referrer"
+            />
+            <button 
+              onClick={() => setLightboxUrl(null)}
+              className="absolute -top-12 right-0 bg-white/10 hover:bg-white/20 text-white rounded-full p-2.5 transition-all text-xs font-black uppercase tracking-widest px-4"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

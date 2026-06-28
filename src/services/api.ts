@@ -127,11 +127,11 @@ export const addLead = async (data: any) => {
  * Legacy alias for addLead
  */
 export const createLead = async (lead: any, inspirationFile?: File) => {
-  let inspirationLink = lead.inspirationLink || '';
+  let inspirationImage = '';
   if (inspirationFile) {
-    inspirationLink = await uploadInspiration(inspirationFile);
+    inspirationImage = await uploadInspiration(inspirationFile);
   }
-  return addLead({ ...lead, inspirationLink });
+  return addLead({ ...lead, inspirationImage });
 };
 
 export const updateLead = async (id: string, lead: any) => {
