@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion } from 'motion/react';
-import { Calendar, Users, DollarSign, MapPin, Link as LinkIcon, CheckCircle2, ChevronRight, Sparkles, Upload } from 'lucide-react';
+import { Calendar, Users, DollarSign, MapPin, Link as LinkIcon, CheckCircle2, ChevronRight, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import * as api from '@/src/services/api';
 
@@ -16,8 +16,7 @@ const intakeSchema = z.object({
   budgetRange: z.string().min(1, 'Budget range is required'),
   venueStatus: z.string().min(1, 'Please let us know your venue status'),
   isDecisionMaker: z.string().min(1, 'Please select if you are the decision maker'),
-  inspirationLink: z.string().url('Must be a valid URL').optional().or(z.literal('')),
-  inspirationImage: z.any().optional(),
+  inspirationLink: z.string().optional().or(z.literal('')),
   eventVibe: z.string().min(1, 'Please select an event vibe'),
   serviceInterest: z.array(z.string()).min(1, 'Select at least one service'),
   referralSource: z.string().min(1, 'Please tell us how you heard about us'),
@@ -44,7 +43,8 @@ const SERVICES = ['Planning', 'Design & Decor', 'Coordination'];
 
 export default function IntakePortal() {
   const [isSubmitted, setIsSubmitted] = React.useState(false);
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -55,11 +55,19 @@ export default function IntakePortal() {
   } = useForm<IntakeFormData>({
     resolver: zodResolver(intakeSchema),
     defaultValues: {
-      eventVibe: '',
-      serviceInterest: [],
+      clientName: '',
+      email: '',
+      phone: '',
+      eventDate: '',
+      guestCount: 50,
+      budgetRange: '',
       venueStatus: '',
       isDecisionMaker: '',
-      eventDate: '',
+      inspirationLink: '',
+      eventVibe: '',
+      serviceInterest: [],
+      referralSource: '',
+      consent: false,
     },
   });
 
@@ -68,24 +76,31 @@ export default function IntakePortal() {
   const guestCountValue = watch('guestCount');
 
   const onSubmit = async (data: IntakeFormData) => {
+    setSubmitError(null);
     try {
+      let formattedLink = (data.inspirationLink || '').trim();
+      if (formattedLink && !/^https?:\/\//i.test(formattedLink)) {
+        formattedLink = `https://${formattedLink}`;
+      }
+
       await api.createLead({
-        clientName: data.clientName,
-        email: data.email,
-        phone: data.phone,
+        clientName: data.clientName.trim(),
+        email: data.email.trim().toLowerCase(),
+        phone: data.phone.trim(),
         eventDate: data.eventDate,
-        guestCount: data.guestCount,
+        guestCount: Number(data.guestCount) || 50,
         budgetRange: data.budgetRange,
         venueStatus: data.venueStatus,
         isDecisionMaker: data.isDecisionMaker === 'Yes',
-        inspirationLink: data.inspirationLink,
+        inspirationLink: formattedLink,
         eventVibe: [data.eventVibe], // Keep as array for compatibility
         servicesInterested: data.serviceInterest,
-        referralSource: data.referralSource
-      }, selectedFile || undefined);
+        referralSource: data.referralSource || 'Other'
+      });
       setIsSubmitted(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting inquiry:', error);
+      setSubmitError(error?.message || 'Failed to submit inquiry. Please try again.');
     }
   };
 
@@ -259,41 +274,17 @@ export default function IntakePortal() {
 
               {/* Section 2: Creative Brief */}
               <div className="space-y-10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                  <div className="space-y-3">
-                    <label className="text-xs font-black text-stone-900 uppercase tracking-widest">Share a link to your event inspiration</label>
-                    <div className="relative">
-                      <LinkIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                      <input 
-                        {...register('inspirationLink')}
-                        placeholder="https://pinterest.com/..."
-                        className="w-full pl-14 pr-6 py-4.5 rounded-2xl border border-stone-300 bg-white focus:ring-2 focus:ring-stone-900 transition-all text-sm font-medium placeholder:text-stone-400"
-                      />
-                    </div>
-                    {errors.inspirationLink && <p className="text-xs text-red-500 font-bold">{errors.inspirationLink.message}</p>}
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-stone-900 uppercase tracking-widest">Share a link to your event inspiration</label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                    <input 
+                      {...register('inspirationLink')}
+                      placeholder="https://pinterest.com/..."
+                      className="w-full pl-14 pr-6 py-4.5 rounded-2xl border border-stone-300 bg-white focus:ring-2 focus:ring-stone-900 transition-all text-sm font-medium placeholder:text-stone-400"
+                    />
                   </div>
-
-                  <div className="space-y-3">
-                    <label className="text-xs font-black text-stone-900 uppercase tracking-widest">Or upload an inspiration image</label>
-                    <div className="relative">
-                      <input 
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                        className="sr-only"
-                        id="inspiration-upload"
-                      />
-                      <label 
-                        htmlFor="inspiration-upload"
-                        className="flex items-center gap-3 w-full px-6 py-4.5 rounded-2xl border border-stone-300 bg-stone-50 hover:bg-stone-100 transition-all cursor-pointer overflow-hidden"
-                      >
-                        <Upload className="w-4 h-4 text-stone-900" />
-                        <span className="text-sm font-medium text-stone-600 truncate">
-                          {selectedFile ? selectedFile.name : 'Choose an image file'}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
+                  {errors.inspirationLink && <p className="text-xs text-red-500 font-bold">{errors.inspirationLink.message}</p>}
                 </div>
 
                 <div className="space-y-6">
@@ -431,16 +422,39 @@ export default function IntakePortal() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="flex flex-col items-center gap-8"
+            className="flex flex-col items-center gap-6"
           >
+            {submitError && (
+              <div className="w-full max-w-xl p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-semibold text-center flex items-center justify-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{submitError}</span>
+              </div>
+            )}
+
+            {Object.keys(errors).length > 0 && (
+              <p className="text-xs font-bold text-red-500 uppercase tracking-wider text-center flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                Please fill in all required fields highlighted above before submitting.
+              </p>
+            )}
+
             <button
               type="submit"
               disabled={isSubmitting}
-              className="group relative inline-flex items-center justify-center gap-3 px-12 py-5 bg-stone-900 text-white rounded-3xl font-bold text-xl hover:bg-stone-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden w-full sm:w-auto shadow-2xl shadow-stone-900/30 active:scale-95"
+              className="group relative inline-flex items-center justify-center gap-3 px-12 py-5 bg-stone-900 text-white rounded-3xl font-bold text-xl hover:bg-stone-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden w-full sm:w-auto shadow-2xl shadow-stone-900/30 active:scale-95 cursor-pointer"
             >
               <span className="relative z-10 flex items-center gap-3">
-                {isSubmitting ? 'Submitting...' : 'Submit Inquiry'}
-                {!isSubmitting && <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    Submit Inquiry
+                    <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
               </span>
               <div className="absolute inset-0 bg-gradient-to-r from-stone-800 to-stone-900 opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>

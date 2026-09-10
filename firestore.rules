@@ -36,7 +36,14 @@ service cloud.firestore {
       return isAuthenticated() && 
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          (request.auth.token.email == "benjamintetteh@gmail.com" && request.auth.token.email_verified == true));
+          (request.auth.token.email.lower() == "benjamintetteh@gmail.com"));
+    }
+
+    function isStaff() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'editor']) ||
+          (request.auth.token.email.lower() == "benjamintetteh@gmail.com"));
     }
 
     function isOwner(userId) {
@@ -83,22 +90,23 @@ service cloud.firestore {
     // Rules
     match /leads/{leadId} {
       allow create: if isValidLead(request.resource.data);
-      allow read, update, delete: if isAdmin();
+      allow read, update: if isStaff() || isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /inventory/{itemId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isStaff() || isAdmin();
     }
 
     match /packages/{pkgId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isStaff() || isAdmin();
     }
 
     match /quotes/{quoteId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isStaff() || isAdmin();
     }
 
     match /settings/{settingId} {
@@ -110,7 +118,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && (
         request.resource.data.role == 'viewer' || 
-        request.auth.token.email == "benjamintetteh@gmail.com" ||
+        request.auth.token.email.lower() == "benjamintetteh@gmail.com" ||
         (exists(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())) && 
          request.resource.data.role == get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.role)
       );
@@ -125,7 +133,7 @@ service cloud.firestore {
     }
 
     match /activity_logs/{logId} {
-      allow read: if isAdmin();
+      allow read: if isStaff() || isAdmin();
       allow create: if isAuthenticated() && isValidActivityLog(request.resource.data);
     }
   }

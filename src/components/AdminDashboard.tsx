@@ -5,7 +5,7 @@ import {
   Users, FileText, Package, TrendingUp, 
   ArrowUpRight, Clock, CheckCircle2, 
   AlertCircle, Loader2, History,
-  Settings as SettingsIcon
+  Settings as SettingsIcon, RefreshCw
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import * as api from '@/src/services/api';
@@ -86,9 +86,19 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-serif font-bold text-stone-900">Dashboard Overview</h1>
-        <p className="text-stone-500 mt-1">Welcome back, here's what's happening today.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-serif font-bold text-stone-900">Dashboard Overview</h1>
+          <p className="text-stone-500 mt-1">Welcome back, here's what's happening today.</p>
+        </div>
+        <button
+          onClick={fetchDashboardData}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 border border-stone-200 rounded-xl font-bold text-stone-600 hover:bg-stone-50 transition-all cursor-pointer self-start sm:self-auto disabled:opacity-50"
+          title="Refresh Dashboard"
+        >
+          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} /> Refresh
+        </button>
       </div>
 
       {/* Stats Grid */}
