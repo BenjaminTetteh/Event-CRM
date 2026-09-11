@@ -36,14 +36,7 @@ service cloud.firestore {
       return isAuthenticated() && 
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          (request.auth.token.email.lower() == "benjamintetteh@gmail.com"));
-    }
-
-    function isStaff() {
-      return isAuthenticated() && 
-        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'editor']) ||
-          (request.auth.token.email.lower() == "benjamintetteh@gmail.com"));
+          (request.auth.token.email == "benjamintetteh@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function isOwner(userId) {
@@ -60,7 +53,7 @@ service cloud.firestore {
 
     // Validators
     function isValidLead(data) {
-      return hasOnlyAllowedFields(data, ['clientName', 'email', 'phone', 'eventDate', 'guestCount', 'budgetRange', 'venueStatus', 'isDecisionMaker', 'inspirationLink', 'eventVibe', 'servicesInterested', 'referralSource', 'status', 'createdAt']) &&
+      return hasOnlyAllowedFields(data, ['clientName', 'email', 'phone', 'eventDate', 'guestCount', 'budgetRange', 'venueStatus', 'isDecisionMaker', 'inspirationLink', 'inspirationImage', 'eventVibe', 'servicesInterested', 'referralSource', 'status', 'createdAt']) &&
              data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 100 &&
              isValidEmail(data.email) &&
              data.status in ['new', 'reviewed', 'quoted', 'archived'] &&
@@ -90,23 +83,22 @@ service cloud.firestore {
     // Rules
     match /leads/{leadId} {
       allow create: if isValidLead(request.resource.data);
-      allow read, update: if isStaff() || isAdmin();
-      allow delete: if isAdmin();
+      allow read, update, delete: if isAdmin();
     }
 
     match /inventory/{itemId} {
       allow read: if isAuthenticated();
-      allow write: if isStaff() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /packages/{pkgId} {
       allow read: if isAuthenticated();
-      allow write: if isStaff() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /quotes/{quoteId} {
       allow read: if isAuthenticated();
-      allow write: if isStaff() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /settings/{settingId} {
@@ -116,24 +108,14 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (
-        request.resource.data.role == 'viewer' || 
-        request.auth.token.email.lower() == "benjamintetteh@gmail.com" ||
-        (exists(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())) && 
-         request.resource.data.role == get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.role)
-      );
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
+        (request.resource.data.role == 'viewer' || request.auth.token.email == "benjamintetteh@gmail.com");
       allow update: if isAdmin() || (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role);
       allow delete: if isAdmin();
     }
 
-    match /invites/{email} {
-      allow read: if isAuthenticated(); // So syncUser (which runs as the logging-in user) can check for their own invite
-      allow write: if isAdmin();
-      allow delete: if isAuthenticated() && request.auth.token.email.lower() == email.lower();
-    }
-
     match /activity_logs/{logId} {
-      allow read: if isStaff() || isAdmin();
+      allow read: if isAdmin();
       allow create: if isAuthenticated() && isValidActivityLog(request.resource.data);
     }
   }

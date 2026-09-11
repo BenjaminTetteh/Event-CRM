@@ -10,10 +10,10 @@ import {
   orderBy, 
   limit,
   where,
-  setDoc,
-  getDocFromServer
+  setDoc
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage } from '../firebase';
 
 enum OperationType {
   CREATE = 'create',
@@ -52,7 +52,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
         providerId: provider.providerId,
         displayName: provider.displayName,
         email: provider.email,
@@ -74,40 +74,85 @@ export const getLeads = async () => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.warn('Primary getLeads query with orderBy failed, falling back to direct collection fetch:', error);
-    try {
-      const snapshot = await getDocs(collection(db, path));
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      list.sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-      return list;
-    } catch (fallbackErr) {
-      handleFirestoreError(fallbackErr, OperationType.LIST, path);
-      return [];
-    }
+    handleFirestoreError(error, OperationType.LIST, path);
   }
 };
 
-export const createLead = async (lead: any) => {
+/**
+ * Saves the Public Intake Form data into a leads collection.
+ */
+export const addLead = async (data: any) => {
   const path = 'leads';
   try {
-    // Sanitize any undefined or null properties to prevent Firestore invalid-argument errors
-    const sanitized: any = {};
-    for (const [key, val] of Object.entries(lead)) {
-      if (val !== undefined && val !== null) {
-        sanitized[key] = val;
-      }
-    }
-    const newLead = { 
-      ...sanitized, 
-      status: sanitized.status || 'new',
-      createdAt: sanitized.createdAt || new Date().toISOString() 
+    const newLead: any = { 
+      clientName: (data.clientName || '').trim() || 'Valued Client',
+      email: (data.email || '').trim().toLowerCase(),
+      phone: (data.phone || '').trim(),
+      eventDate: data.eventDate || '',
+      guestCount: typeof data.guestCount === 'number' && !isNaN(data.guestCount) ? data.guestCount : (Number(data.guestCount) || 50),
+      budgetRange: data.budgetRange || '',
+      venueStatus: data.venueStatus || 'No Venue Yet',
+      isDecisionMaker: Boolean(data.isDecisionMaker),
+      inspirationLink: (data.inspirationLink || '').trim(),
+      inspirationImage: data.inspirationImage || '',
+      eventVibe: Array.isArray(data.eventVibe) ? data.eventVibe : (data.eventVibe ? [data.eventVibe] : ['Luxe']),
+      servicesInterested: Array.isArray(data.servicesInterested) ? data.servicesInterested : [],
+      referralSource: data.referralSource || 'Website',
+      status: 'new',
+      createdAt: new Date().toISOString() 
     };
+
+    // Strip undefined keys to prevent Firestore errors
+    Object.keys(newLead).forEach(key => {
+      if (newLead[key] === undefined || newLead[key] === null) {
+        delete newLead[key];
+      }
+    });
+
     const docRef = await addDoc(collection(db, path), newLead);
-    logActivity('lead', 'Created Lead', `New lead from ${newLead.clientName}`).catch(() => {});
+    
+    // Best-effort activity logging (allowed only if user is logged in)
+    try {
+      if (auth.currentUser) {
+        await logActivity('lead', 'Created Lead', `New lead from ${newLead.clientName}`);
+      }
+    } catch {
+      // Ignore background log error
+    }
+
+    // Trigger email notification via server backend
+    try {
+      fetch('/api/notify-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead: newLead,
+          businessName: 'Event CRM'
+        })
+      }).catch(err => console.error('Notification dispatch warning:', err));
+    } catch (e) {
+      console.error('Failed to trigger email notification:', e);
+    }
+
     return { id: docRef.id, ...newLead };
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
   }
+};
+
+/**
+ * Creates lead with optional inspiration file
+ */
+export const createLead = async (lead: any, inspirationFile?: File) => {
+  let inspirationImage = '';
+  if (inspirationFile) {
+    try {
+      inspirationImage = await uploadInspiration(inspirationFile);
+    } catch (err) {
+      console.warn('Inspiration image processing warning, continuing with lead creation:', err);
+    }
+  }
+  return addLead({ ...lead, inspirationImage });
 };
 
 export const updateLead = async (id: string, lead: any) => {
@@ -281,6 +326,13 @@ export const deleteQuote = async (id: string) => {
   }
 };
 
+/**
+ * Updates a Quote status (e.g., from 'draft' to 'quote' to 'invoice' to 'paid').
+ */
+export const updateQuoteStatus = async (id: string, status: string) => {
+  return updateQuote(id, { status });
+};
+
 // Dashboard Stats
 export const getDashboardStats = async () => {
   try {
@@ -348,48 +400,6 @@ export const getUsers = async () => {
   }
 };
 
-export const getInvites = async () => {
-  const path = 'invites';
-  try {
-    const snapshot = await getDocs(collection(db, path));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
-  }
-};
-
-export const addInvite = async (invite: { email: string; role: string }) => {
-  const path = 'invites';
-  const normalizedEmail = invite.email.toLowerCase().trim();
-  try {
-    const newInvite = { 
-      ...invite, 
-      email: normalizedEmail, // Save normalized email
-      createdAt: new Date().toISOString(),
-      invitedBy: auth.currentUser?.email 
-    };
-    // Use email as ID to prevent duplicates if someone is double-invited
-    const inviteRef = doc(db, 'invites', normalizedEmail);
-    await setDoc(inviteRef, newInvite);
-    await logActivity('user', 'Invited User', `Email: ${normalizedEmail}, Role: ${invite.role}`);
-    return { id: normalizedEmail, ...newInvite };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
-  }
-};
-
-export const deleteInvite = async (email: string) => {
-  const normalizedEmail = email.toLowerCase().trim();
-  const path = `invites/${normalizedEmail}`;
-  try {
-    await deleteDoc(doc(db, 'invites', normalizedEmail));
-    await logActivity('user', 'Removed Invite', `Email: ${normalizedEmail}`);
-    return { success: true };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
-};
-
 export const getUserProfile = async (userId: string) => {
   const path = `users/${userId}`;
   try {
@@ -438,13 +448,9 @@ export const updateUserProfile = async (userId: string, data: { displayName?: st
 export const syncUser = async (user: any) => {
   if (!user) return null;
   const path = `users/${user.uid}`;
-  const normalizedEmail = user.email ? user.email.toLowerCase().trim() : '';
-  
-  console.log('[Auth] Syncing user:', normalizedEmail);
-
   try {
     const userRef = doc(db, 'users', user.uid);
-    const userSnap = await getDocFromServer(userRef);
+    const userSnap = await getDoc(userRef);
     
     const userData = {
       email: user.email,
@@ -453,73 +459,86 @@ export const syncUser = async (user: any) => {
       lastLogin: new Date().toISOString()
     };
 
-    let role = 'viewer';
-    let needsUpdate = false;
-
     if (!userSnap.exists()) {
-      console.log('[Auth] New user detected');
-      // NEW USER flow
-      if (user.email === 'benjamintetteh@gmail.com') {
-        role = 'admin';
-        console.log('[Auth] Assigning bootstrap admin role');
-      } else {
-        // Check for an invite
-        console.log('[Auth] Checking for invite:', normalizedEmail);
-        const inviteRef = doc(db, 'invites', normalizedEmail);
-        const inviteSnap = await getDocFromServer(inviteRef);
-        
-        if (inviteSnap.exists()) {
-          role = inviteSnap.data().role;
-          console.log('[Auth] Invite found! Assigned role:', role);
-          deleteDoc(inviteRef).catch(e => console.error('Failed to delete used invite:', e));
-        } else {
-          console.log('[Auth] No invite found for email');
-        }
-      }
-
+      // Check if this is the bootstrap admin
+      const role = user.email === 'benjamintetteh@gmail.com' ? 'admin' : 'viewer';
       const newUser = { ...userData, role, createdAt: new Date().toISOString() };
       await setDoc(userRef, newUser);
-      logActivity('user', 'New User Registered', `Email: ${user.email} as ${role}`).catch(() => {});
+      await logActivity('user', 'New User Registered', `Email: ${user.email}`);
       return newUser;
     } else {
-      console.log('[Auth] Existing user detected');
-      // EXISTING USER flow
-      const currentData = userSnap.data();
-      role = currentData.role || 'viewer';
-      console.log('[Auth] Current role:', role);
-
-      // UPGRADE viewer if they have a pending invite
-      if (role === 'viewer' && user.email !== 'benjamintetteh@gmail.com') {
-        console.log('[Auth] Checking for upgrade invite:', normalizedEmail);
-        const inviteRef = doc(db, 'invites', normalizedEmail);
-        const inviteSnap = await getDocFromServer(inviteRef);
-
-        if (inviteSnap.exists()) {
-          role = inviteSnap.data().role;
-          needsUpdate = true;
-          console.log('[Auth] Upgrade invite found! New role:', role);
-          deleteDoc(inviteRef).catch(e => console.error('Failed to delete used invite:', e));
-        } else {
-          console.log('[Auth] No upgrade invite found');
-        }
-      }
-
-      if (needsUpdate || currentData.lastLogin !== userData.lastLogin) {
-        console.log('[Auth] Updating profile data');
-        updateDoc(userRef, { ...userData, role }).catch(e => console.error('Update profile error:', e));
-      }
-      
-      const combined = { ...currentData, ...userData, role };
-      console.log('[Auth] Final user state:', combined);
-      return combined;
+      await updateDoc(userRef, userData);
+      return { ...userSnap.data(), ...userData };
     }
   } catch (error) {
-    console.error('[Auth] syncUser critical error:', error);
-    return { email: user.email, role: 'viewer' };
+    handleFirestoreError(error, OperationType.WRITE, path);
   }
 };
 
 // Activity Logs
+/**
+ * Compresses an image file to a lightweight JPEG data URL
+ */
+export const compressImageFile = async (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 1200;
+        let { width, height } = img;
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string || '');
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        // 0.8 quality JPEG produces a crisp ~40-80KB image
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target?.result as string || '');
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
+ * Uploads an inspiration file to Firebase Storage, with seamless fallback to compressed data URL.
+ */
+export const uploadInspiration = async (file: File): Promise<string> => {
+  // 1. Prepare compressed data URL immediately as a reliable payload
+  const fallbackDataUrl = await compressImageFile(file);
+
+  // 2. Attempt Firebase Storage upload if available
+  try {
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const path = `client-briefs/${Date.now()}_${sanitizedName}`;
+    const storageRef = ref(storage, path);
+    const uploadResult = await uploadBytes(storageRef, file);
+    return await getDownloadURL(uploadResult.ref);
+  } catch (error) {
+    console.warn('Firebase Storage upload unavailable or unauthorized. Falling back to inline compressed image:', error);
+    return fallbackDataUrl;
+  }
+};
+
 export const logActivity = async (category: string, action: string, details?: string) => {
   const path = 'activity_logs';
   try {

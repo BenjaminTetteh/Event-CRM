@@ -185,6 +185,21 @@ export default function QuoteEngine() {
           setStatus(quote.status);
           setStep('edit-quote');
         }
+      } else if (location.state?.clientName) {
+        // Converting lead from CRM
+        setQuoteItems([]);
+        setDiscount(0);
+        setApplyTax(true);
+        setStatus('quote');
+        reset({
+          clientName: location.state.clientName,
+          clientContact: location.state.clientContact || '',
+          eventDate: location.state.eventDate || new Date().toISOString().split('T')[0],
+          guestCount: Number(location.state.guestCount) || 100,
+          quoteDate: new Date().toISOString().split('T')[0],
+          validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        });
+        setStep('edit-quote');
       } else if (!existingQuoteId) {
         // Only reset if we're not currently editing a newly created quote
         setQuoteItems([]);

@@ -14,6 +14,7 @@
         "venueStatus": { "type": "string" },
         "isDecisionMaker": { "type": "boolean" },
         "inspirationLink": { "type": "string" },
+        "inspirationImage": { "type": "string" },
         "eventVibe": { "type": "array", "items": { "type": "string" } },
         "servicesInterested": { "type": "array", "items": { "type": "string" } },
         "referralSource": { "type": "string" },

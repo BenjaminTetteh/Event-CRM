@@ -3,20 +3,21 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion } from 'motion/react';
-import { Calendar, Users, DollarSign, MapPin, Link as LinkIcon, CheckCircle2, ChevronRight, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
+import { Calendar, Users, DollarSign, MapPin, Link as LinkIcon, CheckCircle2, ChevronRight, Sparkles, Upload, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import * as api from '@/src/services/api';
 
 const intakeSchema = z.object({
-  clientName: z.string().min(2, 'Name is required'),
-  email: z.string().email('Invalid email address'),
-  phone: z.string().min(10, 'Phone number is required'),
-  eventDate: z.string().min(1, 'Date is required'),
-  guestCount: z.number().min(50, 'Guest count must be at least 50'),
-  budgetRange: z.string().min(1, 'Budget range is required'),
+  clientName: z.string().trim().min(2, 'Full Name is required'),
+  email: z.string().trim().min(3, 'Email address is required').email('Please enter a valid email address'),
+  phone: z.string().trim().min(7, 'Please enter a valid phone number'),
+  eventDate: z.string().min(1, 'Target event date is required'),
+  guestCount: z.number().min(20, 'Guest count must be at least 20'),
+  budgetRange: z.string().min(1, 'Please select an estimated budget range'),
   venueStatus: z.string().min(1, 'Please let us know your venue status'),
   isDecisionMaker: z.string().min(1, 'Please select if you are the decision maker'),
   inspirationLink: z.string().optional().or(z.literal('')),
+  inspirationImage: z.any().optional(),
   eventVibe: z.string().min(1, 'Please select an event vibe'),
   serviceInterest: z.array(z.string()).min(1, 'Select at least one service'),
   referralSource: z.string().min(1, 'Please tell us how you heard about us'),
@@ -43,7 +44,9 @@ const SERVICES = ['Planning', 'Design & Decor', 'Coordination'];
 
 export default function IntakePortal() {
   const [isSubmitted, setIsSubmitted] = React.useState(false);
-  const [submitError, setSubmitError] = React.useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [submissionError, setSubmissionError] = React.useState<string | null>(null);
+  const [submittingProgress, setSubmittingProgress] = React.useState<string | null>(null);
 
   const {
     register,
@@ -59,13 +62,13 @@ export default function IntakePortal() {
       email: '',
       phone: '',
       eventDate: '',
-      guestCount: 50,
+      guestCount: 150,
       budgetRange: '',
       venueStatus: '',
-      isDecisionMaker: '',
+      isDecisionMaker: 'Yes',
       inspirationLink: '',
-      eventVibe: '',
-      serviceInterest: [],
+      eventVibe: 'Luxe',
+      serviceInterest: ['Planning', 'Design & Decor'],
       referralSource: '',
       consent: false,
     },
@@ -76,31 +79,53 @@ export default function IntakePortal() {
   const guestCountValue = watch('guestCount');
 
   const onSubmit = async (data: IntakeFormData) => {
-    setSubmitError(null);
+    setSubmissionError(null);
+    setSubmittingProgress(selectedFile ? 'Saving inspiration board & submitting inquiry...' : 'Saving inquiry to CRM...');
     try {
-      let formattedLink = (data.inspirationLink || '').trim();
-      if (formattedLink && !/^https?:\/\//i.test(formattedLink)) {
-        formattedLink = `https://${formattedLink}`;
+      let cleanLink = (data.inspirationLink || '').trim();
+      if (cleanLink && !cleanLink.startsWith('http://') && !cleanLink.startsWith('https://')) {
+        cleanLink = `https://${cleanLink}`;
       }
 
-      await api.createLead({
+      const created = await api.createLead({
         clientName: data.clientName.trim(),
         email: data.email.trim().toLowerCase(),
         phone: data.phone.trim(),
         eventDate: data.eventDate,
-        guestCount: Number(data.guestCount) || 50,
+        guestCount: typeof data.guestCount === 'number' && !isNaN(data.guestCount) ? data.guestCount : 150,
         budgetRange: data.budgetRange,
         venueStatus: data.venueStatus,
         isDecisionMaker: data.isDecisionMaker === 'Yes',
-        inspirationLink: formattedLink,
-        eventVibe: [data.eventVibe], // Keep as array for compatibility
+        inspirationLink: cleanLink,
+        eventVibe: [data.eventVibe],
         servicesInterested: data.serviceInterest,
-        referralSource: data.referralSource || 'Other'
-      });
+        referralSource: data.referralSource
+      }, selectedFile || undefined);
+
+      if (!created) {
+        throw new Error('Failed to record inquiry in the database. Please try again.');
+      }
+
       setIsSubmitted(true);
     } catch (error: any) {
       console.error('Error submitting inquiry:', error);
-      setSubmitError(error?.message || 'Failed to submit inquiry. Please try again.');
+      setSubmissionError(
+        error?.message || 'We could not submit your inquiry at this moment. Please check your network connection and try again.'
+      );
+    } finally {
+      setSubmittingProgress(null);
+    }
+  };
+
+  const onInvalid = (fieldErrors: any) => {
+    const errorKeys = Object.keys(fieldErrors);
+    if (errorKeys.length > 0) {
+      const firstError = fieldErrors[errorKeys[0]]?.message || 'Please complete all required fields.';
+      setSubmissionError(`Please check required fields: ${firstError}`);
+      const el = document.querySelector(`[name="${errorKeys[0]}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
   };
 
@@ -145,7 +170,7 @@ export default function IntakePortal() {
       <div className="absolute top-20 right-[-10%] w-[40%] h-[40%] bg-stone-200/20 rounded-full blur-3xl pointer-events-none" />
       
       <div className="max-w-4xl mx-auto relative z-10">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
+        <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-10">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -274,17 +299,66 @@ export default function IntakePortal() {
 
               {/* Section 2: Creative Brief */}
               <div className="space-y-10">
-                <div className="space-y-3">
-                  <label className="text-xs font-black text-stone-900 uppercase tracking-widest">Share a link to your event inspiration</label>
-                  <div className="relative">
-                    <LinkIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                    <input 
-                      {...register('inspirationLink')}
-                      placeholder="https://pinterest.com/..."
-                      className="w-full pl-14 pr-6 py-4.5 rounded-2xl border border-stone-300 bg-white focus:ring-2 focus:ring-stone-900 transition-all text-sm font-medium placeholder:text-stone-400"
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-stone-900 uppercase tracking-widest">Share a link to your event inspiration</label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                      <input 
+                        {...register('inspirationLink')}
+                        placeholder="https://pinterest.com/..."
+                        className="w-full pl-14 pr-6 py-4.5 rounded-2xl border border-stone-300 bg-white focus:ring-2 focus:ring-stone-900 transition-all text-sm font-medium placeholder:text-stone-400"
+                      />
+                    </div>
+                    {errors.inspirationLink && <p className="text-xs text-red-500 font-bold">{errors.inspirationLink.message}</p>}
                   </div>
-                  {errors.inspirationLink && <p className="text-xs text-red-500 font-bold">{errors.inspirationLink.message}</p>}
+
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-stone-900 uppercase tracking-widest">Or upload an inspiration image</label>
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <input 
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                          className="sr-only"
+                          id="inspiration-upload"
+                        />
+                        <label 
+                          htmlFor="inspiration-upload"
+                          className="flex items-center gap-3 w-full px-6 py-4.5 rounded-2xl border border-stone-300 bg-stone-50 hover:bg-stone-100 transition-all cursor-pointer overflow-hidden"
+                        >
+                          <Upload className="w-4 h-4 text-stone-900" />
+                          <span className="text-sm font-medium text-stone-600 truncate">
+                            {selectedFile ? selectedFile.name : 'Choose an image file (PNG, JPG, WEBP)'}
+                          </span>
+                        </label>
+                      </div>
+
+                      {selectedFile && (
+                        <div className="flex items-center gap-3 p-3 bg-stone-50 border border-stone-200 rounded-2xl">
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-stone-200 shrink-0 border border-stone-300">
+                            <img 
+                              src={URL.createObjectURL(selectedFile)} 
+                              alt="Inspiration Preview" 
+                              className="w-full h-full object-cover" 
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-stone-900 truncate">{selectedFile.name}</p>
+                            <p className="text-[10px] text-stone-400 font-mono">{(selectedFile.size / 1024).toFixed(0)} KB ready for brief</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedFile(null)}
+                            className="px-2.5 py-1 text-xs font-bold text-stone-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-6">
@@ -424,34 +498,39 @@ export default function IntakePortal() {
             transition={{ delay: 0.4 }}
             className="flex flex-col items-center gap-6"
           >
-            {submitError && (
-              <div className="w-full max-w-xl p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-semibold text-center flex items-center justify-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                <span>{submitError}</span>
+            {/* Error Message Banner */}
+            {submissionError && (
+              <div className="w-full max-w-xl p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 text-red-700 animate-in fade-in">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600" />
+                <div className="text-xs font-medium leading-relaxed flex-1">
+                  <p className="font-bold mb-0.5">Could not submit inquiry</p>
+                  <p>{submissionError}</p>
+                </div>
               </div>
             )}
 
-            {Object.keys(errors).length > 0 && (
-              <p className="text-xs font-bold text-red-500 uppercase tracking-wider text-center flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5" />
-                Please fill in all required fields highlighted above before submitting.
-              </p>
+            {/* Submission Progress */}
+            {submittingProgress && (
+              <div className="w-full max-w-xl p-4 bg-stone-100 border border-stone-200 rounded-2xl flex items-center gap-3 text-stone-800 animate-pulse">
+                <Loader2 className="w-5 h-5 animate-spin text-stone-900" />
+                <p className="text-xs font-medium">{submittingProgress}</p>
+              </div>
             )}
 
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="group relative inline-flex items-center justify-center gap-3 px-12 py-5 bg-stone-900 text-white rounded-3xl font-bold text-xl hover:bg-stone-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden w-full sm:w-auto shadow-2xl shadow-stone-900/30 active:scale-95 cursor-pointer"
+              disabled={isSubmitting || !!submittingProgress}
+              className="group relative inline-flex items-center justify-center gap-3 px-12 py-5 bg-stone-900 text-white rounded-3xl font-bold text-xl hover:bg-stone-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden w-full sm:w-auto shadow-2xl shadow-stone-900/30 active:scale-95"
             >
               <span className="relative z-10 flex items-center gap-3">
-                {isSubmitting ? (
+                {isSubmitting || submittingProgress ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Submitting...
+                    <Loader2 className="w-6 h-6 animate-spin text-white" />
+                    <span>Submitting Brief...</span>
                   </>
                 ) : (
                   <>
-                    Submit Inquiry
+                    <span>Submit Inquiry</span>
                     <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
