@@ -79,22 +79,71 @@ export const getLeads = async () => {
 };
 
 /**
+ * Helper to encode inspiration data into the permitted inspirationLink string
+ */
+export const encodeInspiration = (link?: string, image?: string): string => {
+  const cleanLink = (link || '').trim();
+  const cleanImage = (image || '').trim();
+
+  if (cleanLink && cleanImage) {
+    return JSON.stringify({ link: cleanLink, image: cleanImage });
+  }
+  if (cleanImage) {
+    return JSON.stringify({ image: cleanImage });
+  }
+  return cleanLink;
+};
+
+/**
+ * Helper to decode inspiration link and image from a lead
+ */
+export const parseInspiration = (lead: { inspirationLink?: string; inspirationImage?: string }) => {
+  let link = '';
+  let image = lead?.inspirationImage || '';
+
+  if (lead?.inspirationLink) {
+    const raw = lead.inspirationLink.trim();
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.link) link = parsed.link;
+        if (parsed.image) image = parsed.image;
+        if (parsed.url) link = parsed.url;
+      } catch {
+        link = raw;
+      }
+    } else if (raw.startsWith('data:image') || raw.includes('firebasestorage') || /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(raw)) {
+      if (!image) image = raw;
+      else link = raw;
+    } else {
+      link = raw;
+    }
+  }
+
+  return { link, image };
+};
+
+/**
  * Saves the Public Intake Form data into a leads collection.
+ * Strictly adheres to the 14 allowed keys in the active Firestore security rules.
  */
 export const addLead = async (data: any) => {
   const path = 'leads';
   try {
-    const newLead: any = { 
-      clientName: (data.clientName || '').trim() || 'Valued Client',
+    const finalInspirationLink = encodeInspiration(data.inspirationLink, data.inspirationImage);
+
+    // EXACT 14 allowed fields permitted by the Firestore security rules:
+    // ['clientName', 'email', 'phone', 'eventDate', 'guestCount', 'budgetRange', 'venueStatus', 'isDecisionMaker', 'inspirationLink', 'eventVibe', 'servicesInterested', 'referralSource', 'status', 'createdAt']
+    const newLead: Record<string, any> = { 
+      clientName: (data.clientName || '').trim().slice(0, 100) || 'Valued Client',
       email: (data.email || '').trim().toLowerCase(),
-      phone: (data.phone || '').trim(),
+      phone: (data.phone || '').trim().slice(0, 50),
       eventDate: data.eventDate || '',
       guestCount: typeof data.guestCount === 'number' && !isNaN(data.guestCount) ? data.guestCount : (Number(data.guestCount) || 50),
       budgetRange: data.budgetRange || '',
       venueStatus: data.venueStatus || 'No Venue Yet',
       isDecisionMaker: Boolean(data.isDecisionMaker),
-      inspirationLink: (data.inspirationLink || '').trim(),
-      inspirationImage: data.inspirationImage || '',
+      inspirationLink: finalInspirationLink,
       eventVibe: Array.isArray(data.eventVibe) ? data.eventVibe : (data.eventVibe ? [data.eventVibe] : ['Luxe']),
       servicesInterested: Array.isArray(data.servicesInterested) ? data.servicesInterested : [],
       referralSource: data.referralSource || 'Website',
@@ -102,12 +151,18 @@ export const addLead = async (data: any) => {
       createdAt: new Date().toISOString() 
     };
 
-    // Strip undefined keys to prevent Firestore errors
-    Object.keys(newLead).forEach(key => {
-      if (newLead[key] === undefined || newLead[key] === null) {
+    // Strictly enforce that NO other keys exist in newLead (e.g. no inspirationImage)
+    const ALLOWED_KEYS = new Set([
+      'clientName', 'email', 'phone', 'eventDate', 'guestCount', 'budgetRange',
+      'venueStatus', 'isDecisionMaker', 'inspirationLink', 'eventVibe',
+      'servicesInterested', 'referralSource', 'status', 'createdAt'
+    ]);
+
+    for (const key of Object.keys(newLead)) {
+      if (!ALLOWED_KEYS.has(key) || newLead[key] === undefined || newLead[key] === null) {
         delete newLead[key];
       }
-    });
+    }
 
     const docRef = await addDoc(collection(db, path), newLead);
     
@@ -134,7 +189,7 @@ export const addLead = async (data: any) => {
       console.error('Failed to trigger email notification:', e);
     }
 
-    return { id: docRef.id, ...newLead };
+    return { id: docRef.id, ...newLead, inspirationImage: data.inspirationImage || '' };
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
   }

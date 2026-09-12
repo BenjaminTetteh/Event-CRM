@@ -109,9 +109,18 @@ export default function IntakePortal() {
       setIsSubmitted(true);
     } catch (error: any) {
       console.error('Error submitting inquiry:', error);
-      setSubmissionError(
-        error?.message || 'We could not submit your inquiry at this moment. Please check your network connection and try again.'
-      );
+      let userFriendlyMsg = 'We could not submit your inquiry at this moment. Please check your network connection and try again.';
+      if (error?.message) {
+        try {
+          const parsed = JSON.parse(error.message);
+          if (parsed.error) {
+            userFriendlyMsg = `Submission notice: ${parsed.error}. Please try again shortly.`;
+          }
+        } catch {
+          userFriendlyMsg = error.message;
+        }
+      }
+      setSubmissionError(userFriendlyMsg);
     } finally {
       setSubmittingProgress(null);
     }

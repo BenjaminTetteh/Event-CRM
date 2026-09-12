@@ -53,7 +53,7 @@ service cloud.firestore {
 
     // Validators
     function isValidLead(data) {
-      return hasOnlyAllowedFields(data, ['clientName', 'email', 'phone', 'eventDate', 'guestCount', 'budgetRange', 'venueStatus', 'isDecisionMaker', 'inspirationLink', 'inspirationImage', 'eventVibe', 'servicesInterested', 'referralSource', 'status', 'createdAt']) &&
+      return hasOnlyAllowedFields(data, ['clientName', 'email', 'phone', 'eventDate', 'guestCount', 'budgetRange', 'venueStatus', 'isDecisionMaker', 'inspirationLink', 'eventVibe', 'servicesInterested', 'referralSource', 'status', 'createdAt']) &&
              data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 100 &&
              isValidEmail(data.email) &&
              data.status in ['new', 'reviewed', 'quoted', 'archived'] &&

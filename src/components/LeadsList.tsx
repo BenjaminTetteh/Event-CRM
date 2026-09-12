@@ -253,11 +253,14 @@ export default function LeadsList() {
                         {lead.servicesInterested.length} {lead.servicesInterested.length === 1 ? 'Service' : 'Services'}
                       </span>
                     )}
-                    {(lead.inspirationImage || (lead.inspirationLink && lead.inspirationLink.includes('firebasestorage'))) && (
-                      <span className="hidden sm:inline-flex items-center gap-1 bg-stone-100/80 px-2 py-0.5 rounded-md font-bold uppercase tracking-wide text-amber-600">
-                        <ImageIcon className="w-2.5 h-2.5" /> Image Attached
-                      </span>
-                    )}
+                    {(() => {
+                      const { image } = api.parseInspiration(lead);
+                      return image ? (
+                        <span className="hidden sm:inline-flex items-center gap-1 bg-stone-100/80 px-2 py-0.5 rounded-md font-bold uppercase tracking-wide text-amber-600">
+                          <ImageIcon className="w-2.5 h-2.5" /> Image Attached
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   {expandedLeads[lead.id] ? (
                     <ChevronUp className="w-4 h-4 text-stone-400 group-hover/expand:text-stone-900 transition-transform" />
@@ -342,29 +345,20 @@ export default function LeadsList() {
                       <h4 className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Inspiration & Board</h4>
                       <div className="space-y-3">
                         {(() => {
-                          const hasImageUrl = Boolean(
-                            lead.inspirationImage ||
-                            (lead.inspirationLink && (lead.inspirationLink.includes('firebasestorage') || lead.inspirationLink.startsWith('data:image')))
-                          );
-                          const isWebLink = Boolean(
-                            lead.inspirationLink &&
-                            !lead.inspirationLink.includes('firebasestorage') &&
-                            !lead.inspirationLink.startsWith('data:image')
-                          );
-                          const activeImageUrl = lead.inspirationImage || (lead.inspirationLink?.startsWith('data:image') || lead.inspirationLink?.includes('firebasestorage') ? lead.inspirationLink : null);
+                          const { link: inspirationWebLink, image: activeImageUrl } = api.parseInspiration(lead);
                           
                           return (
                             <>
-                              {isWebLink ? (
+                              {inspirationWebLink ? (
                                 <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
                                   <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Inspiration Website</span>
                                   <a 
-                                    href={lead.inspirationLink} 
+                                    href={inspirationWebLink} 
                                     target="_blank" 
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center gap-2 text-xs font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100/80 px-3 py-2 rounded-xl transition-all w-full justify-between"
                                   >
-                                    <span className="truncate">{lead.inspirationLink}</span>
+                                    <span className="truncate">{inspirationWebLink}</span>
                                     <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                                   </a>
                                 </div>
@@ -375,7 +369,7 @@ export default function LeadsList() {
                                 </div>
                               )}
 
-                              {hasImageUrl && activeImageUrl ? (
+                              {activeImageUrl ? (
                                 <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm space-y-2">
                                   <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest block">Inspiration Image</span>
                                   <div 
